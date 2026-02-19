@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { defineModal } from '@/lib/modals';
 import {
@@ -24,6 +24,7 @@ import type { StatusSelectionResult } from './statusSelection';
 import type { PrioritySelectionResult } from './prioritySelection';
 import type { SubIssueSelectionResult } from './subIssueSelection';
 import type { RelationshipSelectionResult } from './relationshipSelection';
+import { toProject } from '@/lib/routes/navigation';
 
 // Union of all selection modes
 export type SelectionMode =
@@ -64,7 +65,7 @@ function ProjectSelectionContent({ selection }: { selection: SelectionMode }) {
   const modal = useModal();
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId } = useParams({ strict: false });
   const {
     statuses,
     issues,
@@ -254,10 +255,13 @@ function ProjectSelectionContent({ selection }: { selection: SelectionMode }) {
               [...statuses].sort((a, b) => a.sort_order - b.sort_order)[0]
                 ?.id ?? null;
           }
-          const params = new URLSearchParams({ mode: 'create' });
-          if (defaultStatusId) params.set('statusId', defaultStatusId);
-          params.set('parentIssueId', selection.parentIssueId);
-          navigate(`/projects/${projectId}?${params.toString()}`);
+          navigate(
+            toProject(projectId, {
+              mode: 'create',
+              statusId: defaultStatusId ?? undefined,
+              parentIssueId: selection.parentIssueId,
+            })
+          );
         }
       } else if (selection.type === 'relationship') {
         const result = data as RelationshipSelectionResult;
