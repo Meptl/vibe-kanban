@@ -1,440 +1,558 @@
-# Telemetry Removal Plan — vibe-kanban
+# Telemetry Removal Plan — vibe-kanban v0.0.136
 
-This document outlines every step required to fully remove PostHog analytics and Sentry error tracking from the vibe-kanban codebase (frontend, backend, remote frontend, remote backend, and CI/CD).
+This document outlines every step required to fully remove **PostHog analytics** and **Sentry error tracking** from the vibe-kanban codebase at tag `v0.0.136-20251215225138` (commit `c04bf30c`).
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Frontend — PostHog Removal](#1-frontend--posthog-removal)
-3. [Frontend — Sentry Removal](#2-frontend--sentry-removal)
-4. [Remote Frontend — PostHog Removal](#3-remote-frontend--posthog-removal)
-5. [Backend (Local) — PostHog Removal](#4-backend-local--posthog-removal)
-6. [Backend (Local) — Sentry Removal](#5-backend-local--sentry-removal)
-7. [Remote Backend — PostHog Removal](#6-remote-backend--posthog-removal)
-8. [Shared Types & Config](#7-shared-types--config)
-9. [Build System & Environment Variables](#8-build-system--environment-variables)
-10. [CI/CD Pipeline](#9-cicd-pipeline)
-11. [Final Cleanup & Verification](#10-final-cleanup--verification)
+1. [Overview](#1-overview)
+2. [Frontend — PostHog Removal](#2-frontend--posthog-removal)
+3. [Frontend — Sentry Removal](#3-frontend--sentry-removal)
+4. [Remote Frontend — PostHog Removal](#4-remote-frontend--posthog-removal)
+5. [Backend (Local) — Analytics Service Removal](#5-backend-local--analytics-service-removal)
+6. [Backend (Local) — Sentry Removal](#6-backend-local--sentry-removal)
+7. [Remote Backend — Sentry Removal](#7-remote-backend--sentry-removal)
+8. [Shared Types & Config](#8-shared-types--config)
+9. [Build System & Dockerfiles](#9-build-system--dockerfiles)
+10. [CI/CD Pipeline](#10-cicd-pipeline)
+11. [Final Cleanup & Verification](#11-final-cleanup--verification)
 
 ---
 
-## Overview
-
-The repository uses two telemetry services:
+## 1. Overview
 
 | Service | Purpose | Components |
 |---------|---------|------------|
-| **PostHog** | Product analytics & event tracking | Frontend, Remote Frontend, Backend (local), Remote Backend |
+| **PostHog** | Product analytics & event tracking | Frontend, Remote Frontend, Backend (local) |
 | **Sentry** | Error tracking & performance monitoring | Frontend, Backend (local), Remote Backend |
 
-### Environment Variables to Remove (all locations)
+### All Environment Variables to Remove
 
-| Variable | Location |
-|----------|----------|
-| `VITE_POSTHOG_API_KEY` | Frontend |
-| `VITE_POSTHOG_API_ENDPOINT` | Frontend |
-| `VITE_SENTRY_DSN` | Frontend |
-| `VITE_PUBLIC_POSTHOG_KEY` | Remote Frontend |
-| `VITE_PUBLIC_POSTHOG_HOST` | Remote Frontend |
-| `POSTHOG_API_KEY` | Backend (compile-time) |
-| `POSTHOG_API_ENDPOINT` | Backend (compile-time) |
-| `SENTRY_DSN` | Backend |
-| `SENTRY_DSN_REMOTE` | Remote Backend |
-| `SENTRY_AUTH_TOKEN` | CI/CD |
+| Variable | Used By |
+|----------|---------|
+| `VITE_POSTHOG_API_KEY` | Frontend build |
+| `VITE_POSTHOG_API_ENDPOINT` | Frontend build |
+| `VITE_SENTRY_DSN` (unused at this commit — DSN is hardcoded) | — |
+| `VITE_PUBLIC_POSTHOG_KEY` | Remote Frontend build / Dockerfile |
+| `VITE_PUBLIC_POSTHOG_HOST` | Remote Frontend build / Dockerfile |
+| `POSTHOG_API_KEY` | Backend compile-time (`build.rs`) |
+| `POSTHOG_API_ENDPOINT` | Backend compile-time (`build.rs`) |
+| `SENTRY_AUTH_TOKEN` | CI/CD (source map uploads) |
 | `SENTRY_ORG` | CI/CD |
 | `SENTRY_PROJECT` | CI/CD |
 
 ---
 
-## 1. Frontend — PostHog Removal
+## 2. Frontend — PostHog Removal
 
-### 1a. Remove the dependency
+### 2.1 Remove the dependency
 
 **File:** `frontend/package.json`
+- Remove `"posthog-js": "^1.276.0"` from dependencies (line 60)
+- Run your package manager to update the lockfile
 
-- Remove `posthog-js` from `dependencies` (currently `^1.276.0`)
-- Run `npm install` (or your package manager) to update the lockfile
-
-### 1b. Remove PostHog initialization
+### 2.2 Remove PostHog initialization and provider wrapper
 
 **File:** `frontend/src/main.tsx`
 
-- Remove the `import posthog from 'posthog-js'` statement
-- Remove the `posthog.init(...)` block that reads `VITE_POSTHOG_API_KEY` and `VITE_POSTHOG_API_ENDPOINT`
-- The init block contains configuration for `capture_pageview`, `capture_pageleave`, `capture_performance`, `autocapture`, and `opt_out_capturing_by_default` — remove all of it
+Remove:
+- **Line 10:** `import posthog from 'posthog-js';`
+- **Line 11:** `import { PostHogProvider } from 'posthog-js/react';`
+- **Lines 38–54:** The entire `if (import.meta.env.VITE_POSTHOG_API_KEY ...) { posthog.init(...) } else { console.warn(...) }` block
+- **Line 68:** `<PostHogProvider client={posthog}>` — unwrap the children (keep `<Sentry.ErrorBoundary>` or its replacement, and `<App />`)
+- **Line 79:** The closing `</PostHogProvider>`
 
-### 1c. Remove analytics opt-in/opt-out logic
+### 2.3 Remove analytics opt-in/opt-out logic in App.tsx
 
 **File:** `frontend/src/App.tsx`
 
-- Remove `import posthog from 'posthog-js'`
-- Remove the `useEffect` block that handles `posthog.identify()`, `posthog.opt_in_capturing()`, and `posthog.opt_out_capturing()` based on `config.analytics_enabled` and `config.analytics_user_id`
+Remove:
+- **Line 9:** `import { usePostHog } from 'posthog-js/react';`
+- **Line 42:** `const posthog = usePostHog();`
+- **Lines 46–57:** The entire `useEffect` block that calls `posthog.opt_in_capturing()`, `posthog.identify()`, and `posthog.opt_out_capturing()`
 
-### 1d. Remove event tracking calls across frontend pages/components
+Also in App.tsx:
+- **Line 37:** `const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);` — replace `SentryRoutes` with standard `Routes` throughout the JSX (line 119, line 158)
+- **Line 28:** `import * as Sentry from '@sentry/react';` — remove (covered in Sentry section below)
 
-Search for all `posthog.capture(` calls and remove them from the following files:
+### 2.4 Remove event tracking calls in ProjectTasks.tsx
 
-| File | Events to Remove |
-|------|-----------------|
-| `frontend/src/pages/ui-new/LandingPage.tsx` | `remote_onboarding_ui_stage_viewed`, `remote_onboarding_ui_stage_submitted`, `remote_onboarding_ui_stage_completed`, `remote_onboarding_ui_stage_failed` |
-| `frontend/src/pages/ui-new/MigratePage.tsx` | Migration stage tracking events |
-| `frontend/src/pages/ui-new/OnboardingSignInPage.tsx` | `remote_onboarding_ui_sign_in_provider_clicked`, `remote_onboarding_ui_sign_in_provider_result`, `remote_onboarding_ui_sign_in_more_options_opened` |
-| `frontend/src/components/ui-new/scope/NewDesignScope.tsx` | `ui_new_accessed` |
-| `frontend/src/components/ui-new/containers/MigrateMigrateContainer.tsx` | Migration stage tracking events |
-| `frontend/src/components/ui-new/actions/index.ts` | `posthog.displaySurvey('019bb6e8-3d36-0000-1806-7330cd3c727e')` |
+**File:** `frontend/src/pages/ProjectTasks.tsx`
 
-For each file:
-- Remove the `import posthog from 'posthog-js'` import
-- Remove the `posthog.capture(...)` or `posthog.displaySurvey(...)` calls
-- Clean up any variables, callbacks, or `useEffect` blocks that existed only to support these tracking calls
+Remove:
+- **Line 14:** `import { usePostHog } from 'posthog-js/react';`
+- **Line 148 (approx):** `const posthog = usePostHog();` — (find the `usePostHog()` call)
+- **Line 578:** `posthog?.capture('preview_navigated', {...})`
+- **Line 585:** `posthog?.capture('diffs_navigated', {...})`
+- **Line 611:** `posthog?.capture('preview_navigated', {...})`
+- **Line 618:** `posthog?.capture('diffs_navigated', {...})`
+
+For each capture call, remove the entire block including the surrounding `if` or callback that exists solely for tracking.
+
+### 2.5 Remove event tracking in AttemptHeaderActions.tsx
+
+**File:** `frontend/src/components/panels/AttemptHeaderActions.tsx`
+
+Remove:
+- **Line 14:** `import { usePostHog } from 'posthog-js/react';`
+- **Line 36:** `const posthog = usePostHog();`
+- **Lines 49–69:** The three `posthog?.capture(...)` calls inside the `onValueChange` handler:
+  - Line 51: `posthog?.capture('preview_navigated', {...})`
+  - Line 57: `posthog?.capture('diffs_navigated', {...})`
+  - Line 64: `posthog?.capture('view_closed', {...})`
+
+Keep the `onValueChange` callback itself — just remove the tracking calls from within it.
+
+### 2.6 Remove analytics toggle in Settings
+
+**File:** `frontend/src/pages/settings/GeneralSettings.tsx`
+
+Remove the entire "Privacy" `<Card>` block (lines ~636–663) containing the `analytics-enabled` checkbox. This includes:
+- The `<Card>` with CardHeader "Privacy"
+- The `<Checkbox id="analytics-enabled" ...>` that toggles `draft?.analytics_enabled`
+- The label and helper text referencing telemetry
+
+### 2.7 Remove analytics i18n strings
+
+**File:** `frontend/src/i18n/locales/en/settings.json`
+
+Remove the privacy/telemetry section (lines ~165–172):
+- `settings.general.privacy.title`
+- `settings.general.privacy.description`
+- `settings.general.privacy.telemetry.label`
+- `settings.general.privacy.telemetry.helper`
+
+Check other locale files (`ja`, `es`, `ko`, `zh_HANS`) for equivalent keys.
+
+### 2.8 Remove analyticsUserId from ConfigProvider
+
+**File:** `frontend/src/components/ConfigProvider.tsx`
+
+Remove:
+- **Line 26:** `analyticsUserId: string | null;` from `UserSystemState` interface
+- **Line 44:** `analyticsUserId: string | null;` from `UserSystemContextType` interface
+- **Line 76:** `const analyticsUserId = userSystemInfo?.analytics_user_id || null;`
+- **Line 189:** `analyticsUserId,` from the `system` object in the memoized value
+- **Line 196:** `analyticsUserId,` from the context value
+- **Line 212:** `analyticsUserId,` from the `useMemo` dependency array
 
 ---
 
-## 2. Frontend — Sentry Removal
+## 3. Frontend — Sentry Removal
 
-### 2a. Remove the dependencies
+### 3.1 Remove the dependencies
 
 **File:** `frontend/package.json`
 
-- Remove `@sentry/react` (currently `^9.34.0`)
-- Remove `@sentry/vite-plugin` (currently `^3.5.0`)
-- Run `npm install` to update the lockfile
+Remove:
+- `"@sentry/react": "^9.34.0"` (line 41)
+- `"@sentry/vite-plugin": "^3.5.0"` (line 42)
 
-### 2b. Remove Sentry initialization
+Run your package manager to update the lockfile.
+
+### 3.2 Remove Sentry initialization
 
 **File:** `frontend/src/main.tsx`
 
-- Remove the `import * as Sentry from '@sentry/react'` statement
-- Remove the `Sentry.init({...})` block that configures:
-  - `dsn` from `VITE_SENTRY_DSN`
-  - `reactRouterV6BrowserTracingIntegration`
-  - `tracesSampleRate: 1.0`
-  - Source tag `'frontend'`
+Remove:
+- **Line 8:** `import * as Sentry from '@sentry/react';`
+- **Lines 15–20:** React Router imports used only for Sentry (`useLocation`, `useNavigationType`, `createRoutesFromChildren`, `matchRoutes`) — check if any are used elsewhere first
+- **Lines 22–36:** The entire `Sentry.init({...})` block and `Sentry.setTag('source', 'frontend')`
+- **Lines 69–78:** Replace `<Sentry.ErrorBoundary fallback={...} showDialog>` with a plain wrapper or your own error boundary. Keep the children (`<ClickToComponent />`, `<VibeKanbanWebCompanion />`, `<App />`)
 
-### 2c. Remove Sentry error boundary
+### 3.3 Remove SentryRoutes from App.tsx
 
-**File:** `frontend/src/main.tsx` (or wherever the root render is)
+**File:** `frontend/src/App.tsx`
 
-- Remove the `Sentry.ErrorBoundary` wrapper around the app's root component
-- Remove any `fallback` component and `showDialog` prop associated with it
-- Keep the inner app component rendering intact
+- **Line 28:** Remove `import * as Sentry from '@sentry/react';`
+- **Line 37:** Remove `const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);`
+- **Line 119 & 158:** Replace `<SentryRoutes>` / `</SentryRoutes>` with plain `<Routes>` / `</Routes>`
 
-### 2d. Remove Sentry Vite plugin
+### 3.4 Remove Sentry Vite plugin
 
 **File:** `frontend/vite.config.ts`
 
-- Remove the `import` for `@sentry/vite-plugin`
-- Remove the Sentry plugin entry from the `plugins` array (this handles source map uploads during build)
+- **Line 2:** Remove `import { sentryVitePlugin } from "@sentry/vite-plugin";`
+- **Line 55:** Remove `sentryVitePlugin({ org: "bloop-ai", project: "vibe-kanban" }),` from the `plugins` array
+- **Line 81:** Optionally remove `build: { sourcemap: true }` if source maps were only needed for Sentry
 
 ---
 
-## 3. Remote Frontend — PostHog Removal
+## 4. Remote Frontend — PostHog Removal
 
-### 3a. Remove the dependency
+### 4.1 Remove the dependency
 
 **File:** `remote-frontend/package.json`
 
-- Remove `posthog-js` (currently `^1.283.0`)
-- Run `npm install` to update the lockfile
+- Remove `"posthog-js": "^1.283.0"` (line 17)
+- Update lockfile
 
-### 3b. Remove PostHog initialization
+### 4.2 Remove PostHog initialization
 
 **File:** `remote-frontend/src/main.tsx`
 
-- Remove the `import posthog from 'posthog-js'` statement
-- Remove the `posthog.init(...)` block that reads `VITE_PUBLIC_POSTHOG_KEY` and `VITE_PUBLIC_POSTHOG_HOST`
+Remove:
+- **Line 3:** `import posthog from "posthog-js";`
+- **Line 4:** `import { PostHogProvider } from "posthog-js/react";`
+- **Lines 8–12:** The entire `if (import.meta.env.VITE_PUBLIC_POSTHOG_KEY) { posthog.init(...) }` block
+- **Line 16:** `<PostHogProvider client={posthog}>` — unwrap children
+- **Line 18:** `</PostHogProvider>`
 
-### 3c. Remove environment variable templates
+The resulting file should just render `<AppRouter />` directly.
+
+### 4.3 Remove environment variable templates
 
 **File:** `remote-frontend/.env.production.example`
 
-- Remove the `VITE_PUBLIC_POSTHOG_KEY` entry
-- Remove the `VITE_PUBLIC_POSTHOG_HOST` entry
+- Remove **lines 7–9:** The `# PostHog analytics` comment and `VITE_PUBLIC_POSTHOG_KEY=` / `VITE_PUBLIC_POSTHOG_HOST=`
 
-### 3d. Search for and remove any tracking calls
+### 4.4 Search for additional tracking calls
 
-- Grep for `posthog.capture`, `posthog.identify`, `posthog.opt_in`, `posthog.opt_out` in all `remote-frontend/src/` files and remove any found
+Grep `remote-frontend/src/` for any `posthog.capture`, `posthog.identify` calls and remove.
 
 ---
 
-## 4. Backend (Local) — PostHog Removal
+## 5. Backend (Local) — Analytics Service Removal
 
-### 4a. Remove the analytics service
+### 5.1 Delete the analytics module
 
-**File:** `crates/services/src/services/analytics.rs`
+**File:** `crates/services/src/services/analytics.rs` — **Delete entirely**
 
-This is the core analytics module. It contains:
-- `AnalyticsService` struct with PostHog HTTP client
-- `track_event()` method for sending events
-- `generate_user_id()` — generates a machine-specific anonymous ID using:
-  - macOS: `ioreg` hardware UUID
-  - Linux: `/etc/machine-id`
-  - Windows: Registry `MachineGuid` via PowerShell
-- Device info collection (OS type, version, architecture, bitness)
+This file (182 lines) contains:
+- `AnalyticsContext` struct (lines 11–14)
+- `AnalyticsConfig` struct and `new()` (lines 17–36)
+- `AnalyticsService` struct, `new()`, and `track_event()` (lines 38–115)
+- `generate_user_id()` function (lines 119–171) — generates machine-specific user ID
+- `get_device_info()` helper (lines 173–182)
+- Unit tests (lines 184–201)
 
-**Action:** Delete this file entirely, or gut its contents. If other code depends on `AnalyticsService` as a type, you'll need to either remove all references or replace it with a no-op stub during the transition.
+### 5.2 Remove the module export
 
-### 4b. Remove analytics from service module exports
+**File:** `crates/services/src/services/mod.rs`
 
-**File:** `crates/services/src/services/mod.rs` (or equivalent module declaration)
+- **Line 1:** Remove `pub mod analytics;`
 
-- Remove the `pub mod analytics;` line
-- Remove any re-exports of `AnalyticsService`
-
-### 4c. Remove analytics from local deployment setup
+### 5.3 Remove analytics from LocalDeployment
 
 **File:** `crates/local-deployment/src/lib.rs`
 
-- Remove the `AnalyticsService` initialization
-- Remove any passing of the analytics service to the server/router
+Remove:
+- **Line 8:** `analytics::{AnalyticsConfig, AnalyticsContext, AnalyticsService, generate_user_id},` from the `use services::services::{...}` block
+- **Line 41:** `analytics: Option<AnalyticsService>,` from `LocalDeployment` struct
+- **Line 91:** `let user_id = generate_user_id();` — replace with a fixed string or remove the `user_id` field if unused
+- **Line 92:** `let analytics = AnalyticsConfig::new().map(AnalyticsService::new);`
+- **Lines 163–168:** The `analytics_ctx` block that creates `AnalyticsContext`
+- **Line 175:** `analytics_ctx,` argument to `LocalContainerService::new()`
+- **Line 190:** `analytics,` in the `Self { ... }` struct initialization
+- **Lines 221–223:** The `fn analytics(&self) -> &Option<AnalyticsService>` implementation
 
-### 4d. Remove event tracking calls from route handlers
+### 5.4 Remove analytics from the Deployment trait
 
-The following route handlers contain `analytics.track_event(...)` or `track_if_analytics_allowed(...)` calls:
+**File:** `crates/deployment/src/lib.rs`
 
-| File | Events |
-|------|--------|
-| `crates/server/src/routes/config.rs` | `onboarding_disclaimer_accepted`, `onboarding_completed`, `analytics_session_start` |
-| `crates/server/src/routes/oauth.rs` | `analytics_session_start` |
-| `crates/server/src/routes/approvals.rs` | `approval_responded` |
-| `crates/server/src/routes/agents.rs` | `agent_setup_script_executed` |
-| `crates/server/src/routes/workspaces.rs` | `workspace_created_and_started`, `workspace_created_from_pr`, `workspace_deleted`, `task_attempt_merged`, `task_attempt_editor_opened`, `task_attempt_target_branch_changed`, `task_attempt_branch_renamed`, `task_attempt_rebased`, `task_attempt_stopped` |
-| `crates/server/src/routes/pull_requests.rs` | `pr_created` |
-| `crates/server/src/routes/repos.rs` | `repo_editor_opened` |
-| `crates/server/src/routes/tags.rs` | `tag_created`, `tag_updated` |
-| `crates/server/src/routes/follow_ups.rs` | `follow_up_queued`, `follow_up_queue_cancelled` |
-| `crates/server/src/routes/sessions.rs` | `session_review_started` |
-| `crates/server/src/routes/dev_server.rs` | `dev_server_started` |
-| `crates/server/src/routes/images.rs` | `image_uploaded` |
-| `crates/server/src/routes/scripts.rs` | `cleanup_script_executed`, `archive_script_executed`, `setup_script_executed`, `gh_cli_setup_executed` |
-| `crates/server/src/routes/organizations.rs` | `organization_created`, `invitation_created` |
-| `crates/server/src/main.rs` | `session_start` |
+Remove:
+- **Line 18:** `analytics::{AnalyticsContext, AnalyticsService},` from the `use services::services::{...}` block
+- **Line 87:** `fn analytics(&self) -> &Option<AnalyticsService>;` from the trait definition
+- **Lines 119–130:** `spawn_pr_monitor_service()` — remove the analytics parameter construction (lines 121–127), and pass `None` instead of `analytics` to `PrMonitorService::spawn()`
+- **Lines 132–138:** Remove the entire `track_if_analytics_allowed()` method
+- **Lines 188–199:** Remove the `track_if_analytics_allowed("project_created", ...)` call inside `trigger_auto_project_setup()`
 
-For each file:
-- Remove the `use` import for the analytics service
-- Remove the `analytics.track_event(...)` or `track_if_analytics_allowed(...)` calls
-- Remove any analytics-related function parameters (e.g., `analytics: &AnalyticsService`)
-- Clean up any variables that existed solely for building analytics event properties
+### 5.5 Remove analytics from LocalContainerService
 
-### 4e. Remove compile-time environment variable injection
+**File:** `crates/local-deployment/src/container.rs`
+
+Remove:
+- **Line 48:** `analytics::AnalyticsContext,` from imports
+- **Line 80:** `analytics: Option<AnalyticsContext>,` from the struct
+- **Line 95:** `analytics: Option<AnalyticsContext>,` from the `new()` parameter
+- **Line 112:** `analytics,` from the struct initialization
+- **Line 321:** `let analytics = self.analytics.clone();`
+- **Lines 490–498:** The block that fires `"task_attempt_finished"` analytics event (checks `analytics_enabled` then calls `analytics.analytics_service.track_event(...)`)
+
+### 5.6 Remove analytics from PrMonitorService
+
+**File:** `crates/services/src/services/pr_monitor.rs`
+
+Remove:
+- **Line 18:** `analytics::AnalyticsContext,` from imports
+- **Line 37:** `analytics: Option<AnalyticsContext>,` from the struct
+- **Line 44:** `analytics: Option<AnalyticsContext>,` from the `spawn()` parameter
+- **Line 50:** `analytics,` from struct initialization
+- **Lines 133–139:** The block that fires `"pr_status_changed"` analytics event
+
+### 5.7 Remove tracking calls from all route handlers
+
+Each of these files contains `.track_if_analytics_allowed(...)` calls that must be removed. For each: remove the `.track_if_analytics_allowed(...)` call and its entire `await` chain, plus any variables that were only used to build the event properties.
+
+| File | Lines | Events |
+|------|-------|--------|
+| `crates/server/src/main.rs` | 62 | `"session_start"` |
+| `crates/server/src/routes/config.rs` | 170 | `"onboarding_disclaimer_accepted"`, `"onboarding_completed"`, `"analytics_session_start"` |
+| `crates/server/src/routes/oauth.rs` | 160–209 | Auto-enable `analytics_enabled` on login (lines 160–194), `"analytics_session_start"` (185), `"$identify"` (202) |
+| `crates/server/src/routes/approvals.rs` | 22 | `"tool_approval_requested"` |
+| `crates/server/src/routes/images.rs` | 110 | `"image_uploaded"` |
+| `crates/server/src/routes/tags.rs` | 44, 64 | `"tag_created"`, `"tag_updated"` |
+| `crates/server/src/routes/tasks.rs` | 125, 167, 201, 367, 428 | `"task_created"`, `"task_updated"`, `"task_deleted"`, `"task_shared"`, `"start_sharing_task"` |
+| `crates/server/src/routes/shared_tasks.rs` | 55, 75, 98 | `"reassign_shared_task"`, `"stop_sharing_task"`, `"link_shared_task_to_local"` |
+| `crates/server/src/routes/projects.rs` | 185, 305, 397, 448 | `"project_created"`, `"project_updated"`, `"project_deleted"`, `"project_settings_updated"` |
+| `crates/server/src/routes/organizations.rs` | 100, 144 | `"organization_created"`, `"organization_updated"` |
+| `crates/server/src/routes/task_attempts.rs` | 167, 203, 563, 662, 886, 990, 1089, 1193, 1213, 1243, 1320, 1391, 1412 | `"task_attempt_started"`, `"agent_setup_script_executed"`, `"task_attempt_merged"`, `"task_attempt_editor_opened"`, `"task_attempt_target_branch_changed"`, `"task_attempt_branch_renamed"`, `"task_attempt_rebased"`, `"dev_server_started"`, `"dev_server_restarted"`, `"task_attempt_stopped"`, `"setup_script_executed"`, `"cleanup_script_executed"`, `"archive_script_executed"` |
+| `crates/server/src/routes/task_attempts/pr.rs` | 276 | `"pull_request_created"` |
+| `crates/server/src/routes/task_attempts/queue.rs` | 37, 60 | `"follow_up_queued"`, `"follow_up_dequeued"` |
+
+**Special case — `oauth.rs` (lines 160–194):** This block auto-enables `analytics_enabled = true` on login. Remove the entire block that checks `analytics_enabled`, modifies config, and sends the `"analytics_session_start"` event. Also remove the `"$identify"` event at lines 199–209.
+
+### 5.8 Remove compile-time environment variable injection
 
 **File:** `crates/server/build.rs`
 
-- Remove the lines that read and emit `POSTHOG_API_KEY` and `POSTHOG_API_ENDPOINT` as compile-time constants (e.g., `println!("cargo:rustc-env=...")`)
+Remove lines 6–11:
+```rust
+if let Ok(api_key) = std::env::var("POSTHOG_API_KEY") {
+    println!("cargo:rustc-env=POSTHOG_API_KEY={}", api_key);
+}
+if let Ok(api_endpoint) = std::env::var("POSTHOG_API_ENDPOINT") {
+    println!("cargo:rustc-env=POSTHOG_API_ENDPOINT={}", api_endpoint);
+}
+```
+
+Keep the `VK_SHARED_API_BASE` lines (12–14) and the frontend dist directory setup (16–28).
 
 ---
 
-## 5. Backend (Local) — Sentry Removal
+## 6. Backend (Local) — Sentry Removal
 
-### 5a. Remove the Sentry module
+### 6.1 Delete the Sentry module
 
-**File:** `crates/utils/src/sentry.rs`
+**File:** `crates/utils/src/sentry.rs` — **Delete entirely** (87 lines)
 
-This contains:
-- `SentrySource` enum (`Backend`, `Mcp`, `Remote`)
-- `init_once()` — one-time Sentry initialization
-- `configure_user_scope()` — sets user context
-- `sentry_layer()` — tracing layer that converts log levels to Sentry breadcrumbs/events
+Contains:
+- Hardcoded Sentry DSN (line 6): `https://1065a1d276a581316999a07d5dffee26@o4509603705192449.ingest.de.sentry.io/4509605576441937`
+- `SentrySource` enum (lines 10–23)
+- `init_once()` function (lines 33–48)
+- `configure_user_scope()` function (lines 50–67)
+- `sentry_layer()` tracing layer (lines 69–86)
 
-**Action:** Delete this file entirely.
+### 6.2 Remove Sentry from utils module exports
 
-### 5b. Remove Sentry from utility module exports
+**File:** `crates/utils/src/lib.rs`
 
-**File:** `crates/utils/src/lib.rs` (or equivalent)
+- **Line 17:** Remove `pub mod sentry;`
 
-- Remove `pub mod sentry;`
-- Remove any re-exports
+### 6.3 Remove Sentry initialization from server main
 
-### 5c. Remove Sentry Cargo dependencies
+**File:** `crates/server/src/main.rs`
 
-**File:** `crates/server/Cargo.toml`
+Remove:
+- **Line 13:** `sentry::{self as sentry_utils, SentrySource, sentry_layer},` from the `use utils::{...}` block
+- **Line 30:** `sentry_utils::init_once(SentrySource::Backend);`
+- **Line 40:** `.with(sentry_layer())` from the tracing subscriber chain
+- **Line 49:** `deployment.update_sentry_scope().await?;`
 
-- Remove `sentry = "0.41.0"` from `[dependencies]`
+### 6.4 Remove `update_sentry_scope` from Deployment trait
+
+**File:** `crates/deployment/src/lib.rs`
+
+- **Line 37:** Remove `use utils::sentry as sentry_utils;`
+- **Lines 109–117:** Remove the `update_sentry_scope()` default method
+
+### 6.5 Remove Sentry Cargo dependencies
 
 **File:** `crates/utils/Cargo.toml`
+- **Line 22:** Remove `sentry = { version = "0.41.0", features = [...] }`
+- **Line 23:** Remove `sentry-tracing = { version = "0.41.0", features = [...] }`
 
-- Remove `sentry = "0.41.0"` from `[dependencies]`
-- Remove `sentry-tracing = "0.41.0"` from `[dependencies]`
+**File:** `crates/server/Cargo.toml`
+- **Line 36:** Remove `sentry = { version = "0.41.0", features = [...] }`
 
-### 5d. Remove Sentry initialization from entry points
-
-**File:** `crates/server/src/main.rs` (and any other entry points)
-
-- Remove `sentry::init_once(...)` calls
-- Remove `sentry::configure_user_scope(...)` calls
-- Remove `sentry::sentry_layer()` from the tracing subscriber setup
-- Remove `_sentry_guard` variables (Sentry keeps a guard to flush on shutdown)
+**File:** `crates/local-deployment/Cargo.toml`
+- **Line 25:** Remove `sentry = { version = "0.41.0", features = [...] }`
 
 ---
 
-## 6. Remote Backend — PostHog Removal
+## 7. Remote Backend — Sentry Removal
 
-### 6a. Remove the remote analytics service
+### 7.1 Remove Sentry from remote lib.rs
 
-**File:** `crates/remote/src/analytics.rs`
+**File:** `crates/remote/src/lib.rs`
 
-Similar to the local analytics service but uses UUID-based user tracking. Contains:
-- `AnalyticsService::track()` — takes `user_id: UUID`, event name, and properties
-- Special handling for `$identify` events with `$set` properties
-- All events tagged with `source: "remote"`
+Remove:
+- **Line 15:** `use sentry_tracing::{EventFilter, SentryLayer};`
+- **Line 25:** `static INIT_GUARD: OnceLock<sentry::ClientInitGuard> = OnceLock::new();`
+- **Line 43:** `.with(sentry_layer())` from the tracing subscriber chain
+- **Lines 47–69:** `environment()` and `sentry_init_once()` functions (including the hardcoded remote Sentry DSN at line 58)
+- **Lines 72–89:** `configure_user_scope()` function
+- **Lines 91–108:** `sentry_layer()` function
 
-**Action:** Delete this file entirely.
-
-### 6b. Remove from remote module
-
-**File:** `crates/remote/src/mod.rs` or similar
-
-- Remove `pub mod analytics;`
-
-### 6c. Remove analytics initialization from remote app
-
-**File:** `crates/remote/src/app.rs`
-
-- Remove `AnalyticsService` initialization and injection
+### 7.2 Remove Sentry initialization from remote main
 
 **File:** `crates/remote/src/main.rs`
 
-- Remove any analytics-related setup code
+- **Line 1:** Remove `sentry_init_once` from the import
+- **Line 5:** Remove `sentry_init_once();`
 
-### 6d. Remove tracking calls from remote route handlers
+### 7.3 Remove Sentry Cargo dependencies
 
-- Grep for `analytics.track(` across all files in `crates/remote/src/` and remove all tracking calls and associated imports/parameters
+**File:** `crates/remote/Cargo.toml`
+- **Line 17:** Remove `sentry = { version = "0.41.0", features = [...] }`
+- **Line 18:** Remove `sentry-tracing = { version = "0.41.0", features = [...] }`
 
 ---
 
-## 7. Shared Types & Config
+## 8. Shared Types & Config
 
-### 7a. Remove analytics fields from Config type
+### 8.1 Remove analytics fields from TypeScript types
 
-Locate the shared `Config` struct (likely in a shared types crate or the server crate):
+**File:** `shared/types.ts`
 
+- **Line 175:** In `UserSystemInfo`, remove `analytics_user_id: string,`
+- **Line 273:** In `Config`, remove `analytics_enabled: boolean,`
+
+### 8.2 Remove analytics fields from Rust Config struct
+
+Find the Rust `Config` struct (likely in `crates/services/src/services/config.rs`):
 - Remove the `analytics_enabled: bool` field
-- Remove the `analytics_user_id: String` field from `UserSystemInfo`
+- Remove any default value for it
+- Remove the `analytics_user_id` field from the user system info response
 
-### 7b. Remove frontend config consumption
+### 8.3 Remove from API responses
 
-After removing the backend fields, the frontend will also need updates:
+**File:** `crates/server/src/routes/config.rs`
 
-- Remove any references to `config.analytics_enabled` and `config.analytics_user_id` in frontend code
-- Remove any analytics settings UI (toggle switches, consent dialogs, etc.) if present
-
-### 7c. Remove TypeScript types
-
-- Search for and remove any TypeScript interfaces/types referencing `analytics_enabled` or `analytics_user_id`
+- **Lines 75, 94:** Remove `analytics_user_id` from the `UserSystemInfo` response construction
+- **Lines 145–174:** Remove the `track_config_events()` function entirely
 
 ---
 
-## 8. Build System & Environment Variables
+## 9. Build System & Dockerfiles
 
-### 8a. Backend build scripts
+### 9.1 Dockerfile
+
+**File:** `Dockerfile`
+
+Remove:
+- **Line 19:** `ARG POSTHOG_API_KEY`
+- **Line 20:** `ARG POSTHOG_API_ENDPOINT`
+- **Line 22:** `ENV VITE_PUBLIC_POSTHOG_KEY=$POSTHOG_API_KEY`
+- **Line 23:** `ENV VITE_PUBLIC_POSTHOG_HOST=$POSTHOG_API_ENDPOINT`
+
+### 9.2 Build script
 
 **File:** `crates/server/build.rs`
 
-- Remove `POSTHOG_API_KEY` environment variable reading/emission
-- Remove `POSTHOG_API_ENDPOINT` environment variable reading/emission
-- If these were the only lines in `build.rs`, you may be able to remove the file and the `build = "build.rs"` line from the crate's `Cargo.toml`
-
-### 8b. Dockerfiles
-
-Search all Dockerfiles in the repo for:
-- `ARG POSTHOG_API_KEY`
-- `ARG POSTHOG_API_ENDPOINT`
-- `ARG SENTRY_DSN`
-- `ARG SENTRY_DSN_REMOTE`
-- `ENV VITE_PUBLIC_POSTHOG_KEY`
-- `ENV VITE_PUBLIC_POSTHOG_HOST`
-- `ENV VITE_SENTRY_DSN`
-
-Remove all of these build args and environment variable declarations.
-
-### 8c. Environment example files
-
-- Remove telemetry variables from any `.env.example`, `.env.production.example`, `.env.development.example` files
+Remove PostHog env var injection (lines 6–11) as described in section 5.8.
 
 ---
 
-## 9. CI/CD Pipeline
+## 10. CI/CD Pipeline
 
 **File:** `.github/workflows/pre-release.yml`
 
-### 9a. Remove Sentry release steps
+### 10.1 Frontend build step (line ~143)
 
-- Remove the `getsentry/action-release@v3` step (Sentry release creation)
-- Remove the `matbour/setup-sentry-cli@v2` step (Sentry CLI installation)
-- Remove the `sentry-cli debug-files upload --include-sources` step (source map upload)
-- Remove references to secrets: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
+Remove from the `Build frontend` step environment:
+- **Line 146:** `SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}`
+- **Line 147:** `VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}`
+- **Line 148:** `VITE_POSTHOG_API_ENDPOINT: ${{ secrets.POSTHOG_API_ENDPOINT }}`
 
-### 9b. Remove PostHog build args
+### 10.2 Remove Sentry release step (lines 150–160)
 
-- Remove the `POSTHOG_API_KEY` and `POSTHOG_API_ENDPOINT` Docker build args
-- Remove the `VITE_PUBLIC_POSTHOG_KEY` and `VITE_PUBLIC_POSTHOG_HOST` environment variables
+Delete the entire `Create Sentry release` step:
+```yaml
+- name: Create Sentry release
+  uses: getsentry/action-release@v3
+  env:
+    SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+    SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+  with:
+    release: ${{ needs.bump-version.outputs.new_version }}
+    environment: production
+    sourcemaps: "./frontend/dist"
+    ignore_missing: true
+```
 
-### 9c. Remove Sentry DSN from build
+### 10.3 Backend build steps (lines ~232–252)
 
-- Remove `SENTRY_DSN` and `SENTRY_DSN_REMOTE` from any CI build arg or env steps
+Remove PostHog env vars from both "Build backend (Linux)" and "Build backend (non-Linux)" steps:
+- **Line 239:** `POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}`
+- **Line 240:** `POSTHOG_API_ENDPOINT: ${{ secrets.POSTHOG_API_ENDPOINT }}`
+- **Line 250:** `POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}`
+- **Line 251:** `POSTHOG_API_ENDPOINT: ${{ secrets.POSTHOG_API_ENDPOINT }}`
 
-### 9d. Check other workflow files
+Keep `VK_SHARED_API_BASE` — that's not telemetry.
 
-- Search `.github/workflows/` for any other files referencing Sentry, PostHog, or telemetry secrets and clean them up
+### 10.4 Remove Sentry CLI steps (lines 254–263)
+
+Delete the `Setup Sentry CLI` step:
+```yaml
+- name: Setup Sentry CLI
+  uses: matbour/setup-sentry-cli@v2
+  with:
+    token: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    organization: ${{ secrets.SENTRY_ORG }}
+    project: ${{ secrets.SENTRY_PROJECT }}
+    version: 2.21.2
+```
+
+Delete the `Upload source maps to Sentry` step:
+```yaml
+- name: Upload source maps to Sentry
+  run: sentry-cli debug-files upload --include-sources target/${{ matrix.target }}/release
+```
 
 ---
 
-## 10. Final Cleanup & Verification
+## 11. Final Cleanup & Verification
 
-### 10a. Search for remaining references
+### 11.1 Grep for remaining references
 
-Run these searches across the entire repository to catch anything missed:
+Run these searches across the entire repo to catch anything missed:
 
 ```bash
-# PostHog references
-grep -r "posthog" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.json" --include="*.toml" --include="*.yml" --include="*.yaml" --include="*.env*" --include="Dockerfile*"
+# PostHog
+grep -rn "posthog\|PostHog\|POSTHOG" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.json" --include="*.toml" --include="*.yml" --include="*.yaml" --include="Dockerfile*"
 
-# Sentry references
-grep -r "sentry" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.json" --include="*.toml" --include="*.yml" --include="*.yaml" --include="*.env*" --include="Dockerfile*"
+# Sentry
+grep -rn "sentry\|Sentry\|SENTRY" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.json" --include="*.toml" --include="*.yml" --include="*.yaml" --include="Dockerfile*"
 
-# Analytics references (broader sweep)
-grep -r "analytics" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.json" --include="*.toml"
-
-# Telemetry env vars
-grep -r "POSTHOG\|SENTRY" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.env*" --include="*.yml" --include="*.yaml" --include="Dockerfile*" --include="*.toml"
+# Analytics (broader)
+grep -rn "analytics_enabled\|analytics_user_id\|track_if_analytics_allowed\|track_event\|AnalyticsService\|AnalyticsContext\|AnalyticsConfig" --include="*.rs" --include="*.ts" --include="*.tsx"
 ```
 
-### 10b. Build verification
+### 11.2 Build verification
 
 ```bash
 # Frontend
-cd frontend && npm install && npm run build
+cd frontend && pnpm install && pnpm run build
 
 # Remote Frontend
-cd remote-frontend && npm install && npm run build
+cd remote-frontend && pnpm install && pnpm run build
 
 # Backend
 cargo build --workspace
 ```
 
-### 10c. Test verification
+### 11.3 Test verification
 
 ```bash
-# Run all tests to ensure nothing breaks
 cargo test --workspace
-cd frontend && npm test
+cd frontend && pnpm test
 ```
 
-### 10d. Lockfile updates
+### 11.4 Lockfile updates
 
-- Ensure `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml` are regenerated for both `frontend/` and `remote-frontend/`
-- Run `cargo update` if needed to clean up unused transitive dependencies
+- Regenerate `pnpm-lock.yaml` for both `frontend/` and `remote-frontend/`
+- Run `cargo update` if needed to clean up unused transitive Sentry/reqwest dependencies
 
-### 10e. Remove GitHub secrets (manual)
+### 11.5 Remove GitHub repository secrets (post-deploy)
 
-After deploying, remove these secrets from the GitHub repository settings:
+After deploying a build without telemetry, remove these secrets from the GitHub repo settings:
+
 - `SENTRY_AUTH_TOKEN`
 - `SENTRY_ORG`
 - `SENTRY_PROJECT`
-- `SENTRY_DSN`
-- `SENTRY_DSN_REMOTE`
 - `POSTHOG_API_KEY`
 - `POSTHOG_API_ENDPOINT`
 
@@ -442,14 +560,15 @@ After deploying, remove these secrets from the GitHub repository settings:
 
 ## Summary Checklist
 
-- [ ] **Frontend:** Remove `posthog-js` dependency and all tracking calls (6+ files)
-- [ ] **Frontend:** Remove `@sentry/react` and `@sentry/vite-plugin` and all init/boundary code
-- [ ] **Remote Frontend:** Remove `posthog-js` dependency and initialization
-- [ ] **Backend Local:** Delete `crates/services/src/services/analytics.rs` and remove all `track_event` calls (~15 route files)
-- [ ] **Backend Local:** Delete `crates/utils/src/sentry.rs` and remove Sentry Cargo deps
-- [ ] **Remote Backend:** Delete `crates/remote/src/analytics.rs` and remove all tracking calls
-- [ ] **Shared Types:** Remove `analytics_enabled` and `analytics_user_id` from config structs
-- [ ] **Build System:** Clean `build.rs`, Dockerfiles, and `.env` templates
-- [ ] **CI/CD:** Remove Sentry release steps and PostHog build args from GitHub Actions
-- [ ] **Verify:** Grep for remaining references, build all targets, run all tests
-- [ ] **Deploy:** Remove GitHub repository secrets
+- [ ] **Frontend PostHog:** Remove `posthog-js` dep, init in `main.tsx`, opt-in/out in `App.tsx`, capture calls in `ProjectTasks.tsx` and `AttemptHeaderActions.tsx`, analytics toggle in `GeneralSettings.tsx`, i18n strings, `analyticsUserId` from `ConfigProvider.tsx`
+- [ ] **Frontend Sentry:** Remove `@sentry/react` + `@sentry/vite-plugin` deps, `Sentry.init()` in `main.tsx`, `Sentry.ErrorBoundary`, `SentryRoutes` in `App.tsx`, `sentryVitePlugin` in `vite.config.ts`
+- [ ] **Remote Frontend:** Remove `posthog-js` dep, init in `main.tsx`, `.env.production.example` entries
+- [ ] **Backend Analytics Service:** Delete `crates/services/src/services/analytics.rs`, remove `pub mod analytics;`, remove from `LocalDeployment`, `Deployment` trait, `LocalContainerService`, `PrMonitorService`
+- [ ] **Backend Route Tracking:** Remove `track_if_analytics_allowed` calls from 14 route files (~37 call sites), special-case `oauth.rs` auto-enable logic
+- [ ] **Backend Sentry:** Delete `crates/utils/src/sentry.rs`, remove from `main.rs` tracing setup, `Deployment` trait, 4 Cargo.toml files
+- [ ] **Remote Backend Sentry:** Remove from `crates/remote/src/lib.rs` and `main.rs`, 1 Cargo.toml
+- [ ] **Shared Types:** Remove `analytics_enabled` from `Config`, `analytics_user_id` from `UserSystemInfo`
+- [ ] **Build System:** Clean `build.rs` and `Dockerfile`
+- [ ] **CI/CD:** Remove Sentry release + CLI steps, PostHog build args from `.github/workflows/pre-release.yml`
+- [ ] **Verify:** Grep, build, test
+- [ ] **Deploy & Cleanup:** Remove GitHub repo secrets
