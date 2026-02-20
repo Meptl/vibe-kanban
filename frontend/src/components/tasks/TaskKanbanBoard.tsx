@@ -1,5 +1,4 @@
 import { memo } from 'react';
-import { useAuth } from '@/hooks';
 import {
   type DragEndEvent,
   KanbanBoard,
@@ -47,8 +46,6 @@ function TaskKanbanBoard({
   onCreateTask,
   projectId,
 }: TaskKanbanBoardProps) {
-  const { userId } = useAuth();
-
   return (
     <KanbanProvider onDragEnd={onDragEnd}>
       {Object.entries(columns).map(([status, items]) => {
@@ -62,13 +59,7 @@ function TaskKanbanBoard({
             />
             <KanbanCards>
               {items.map((item, index) => {
-                const isOwnTask =
-                  item.type === 'task' &&
-                  (!item.sharedTask?.assignee_user_id ||
-                    !userId ||
-                    item.sharedTask?.assignee_user_id === userId);
-
-                if (isOwnTask) {
+                if (item.type === 'task') {
                   return (
                     <TaskCard
                       key={item.task.id}
@@ -83,8 +74,7 @@ function TaskKanbanBoard({
                   );
                 }
 
-                const sharedTask =
-                  item.type === 'shared' ? item.task : item.sharedTask!;
+                const sharedTask = item.task;
 
                 return (
                   <SharedTaskCard

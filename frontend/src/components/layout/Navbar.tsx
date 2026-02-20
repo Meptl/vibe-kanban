@@ -1,4 +1,4 @@
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useCallback } from 'react';
 import { siDiscord } from 'simple-icons';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,6 @@ import {
   MessageCircle,
   Menu,
   Plus,
-  LogOut,
-  LogIn,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { SearchBar } from '@/components/SearchBar';
@@ -28,17 +26,6 @@ import { useProject } from '@/contexts/ProjectContext';
 import { useOpenProjectInEditor } from '@/hooks/useOpenProjectInEditor';
 import { OpenInIdeButton } from '@/components/ide/OpenInIdeButton';
 import { useDiscordOnlineCount } from '@/hooks/useDiscordOnlineCount';
-import { useTranslation } from 'react-i18next';
-import { Switch } from '@/components/ui/switch';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { OAuthDialog } from '@/components/dialogs/global/OAuthDialog';
-import { useUserSystem } from '@/components/ConfigProvider';
-import { oauthApi } from '@/lib/api';
 
 const INTERNAL_NAV = [{ label: 'Projects', icon: FolderOpen, to: '/projects' }];
 
@@ -72,37 +59,16 @@ function NavDivider() {
 
 export function Navbar() {
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { projectId, project } = useProject();
   const { query, setQuery, active, clear, registerInputRef } = useSearch();
   const handleOpenInEditor = useOpenProjectInEditor(project || null);
   const { data: onlineCount } = useDiscordOnlineCount();
-  const { loginStatus, reloadSystem } = useUserSystem();
 
   const setSearchBarRef = useCallback(
     (node: HTMLInputElement | null) => {
       registerInputRef(node);
     },
     [registerInputRef]
-  );
-  const { t } = useTranslation(['tasks', 'common']);
-  // Navbar is global, but the share tasks toggle only makes sense on the tasks route
-  const isTasksRoute = /^\/projects\/[^/]+\/tasks/.test(location.pathname);
-  const showSharedTasks = searchParams.get('shared') !== 'off';
-  const shouldShowSharedToggle =
-    isTasksRoute && active && project?.remote_project_id != null;
-
-  const handleSharedToggle = useCallback(
-    (checked: boolean) => {
-      const params = new URLSearchParams(searchParams);
-      if (checked) {
-        params.delete('shared');
-      } else {
-        params.set('shared', 'off');
-      }
-      setSearchParams(params, { replace: true });
-    },
-    [searchParams, setSearchParams]
   );
 
   const handleCreateTask = () => {
@@ -114,24 +80,6 @@ export function Navbar() {
   const handleOpenInIDE = () => {
     handleOpenInEditor();
   };
-
-  const handleOpenOAuth = async () => {
-    const profile = await OAuthDialog.show();
-    if (profile) {
-      await reloadSystem();
-    }
-  };
-
-  const handleOAuthLogout = async () => {
-    try {
-      await oauthApi.logout();
-      await reloadSystem();
-    } catch (err) {
-      console.error('Error logging out:', err);
-    }
-  };
-
-  const isOAuthLoggedIn = loginStatus?.status === 'loggedin';
 
   return (
     <div className="border-b bg-background">
@@ -182,30 +130,6 @@ export function Navbar() {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-1">
-            {isOAuthLoggedIn && shouldShowSharedToggle ? (
-              <>
-                <div className="flex items-center gap-4">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>
-                          <Switch
-                            checked={showSharedTasks}
-                            onCheckedChange={handleSharedToggle}
-                            aria-label={t('tasks:filters.sharedToggleAria')}
-                          />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        {t('tasks:filters.sharedToggleTooltip')}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <NavDivider />
-              </>
-            ) : null}
-
             {projectId ? (
               <>
                 <div className="flex items-center gap-1">
@@ -295,18 +219,6 @@ export function Navbar() {
                   })}
 
                   <DropdownMenuSeparator />
-
-                  {isOAuthLoggedIn ? (
-                    <DropdownMenuItem onSelect={handleOAuthLogout}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      {t('common:signOut')}
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem onSelect={handleOpenOAuth}>
-                      <LogIn className="mr-2 h-4 w-4" />
-                      Sign in
-                    </DropdownMenuItem>
-                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

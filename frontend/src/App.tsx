@@ -6,13 +6,11 @@ import { Projects } from '@/pages/Projects';
 import { ProjectTasks } from '@/pages/ProjectTasks';
 import { FullAttemptLogsPage } from '@/pages/FullAttemptLogs';
 import { NormalLayout } from '@/components/layout/NormalLayout';
-import { useAuth } from '@/hooks';
 
 import {
   AgentSettings,
   GeneralSettings,
   McpSettings,
-  OrganizationSettings,
   ProjectSettings,
   SettingsLayout,
 } from '@/pages/settings/';
@@ -34,7 +32,6 @@ import NiceModal from '@ebay/nice-modal-react';
 
 function AppContent() {
   const { config, updateAndSaveConfig, loading } = useUserSystem();
-  const { isSignedIn } = useAuth();
 
   useEffect(() => {
     if (!config) return;
@@ -81,7 +78,7 @@ function AppContent() {
     return () => {
       cancelled = true;
     };
-  }, [config, isSignedIn, updateAndSaveConfig]);
+  }, [config, updateAndSaveConfig]);
 
   if (loading) {
     return (
@@ -115,10 +112,6 @@ function AppContent() {
                   <Route index element={<Navigate to="general" replace />} />
                   <Route path="general" element={<GeneralSettings />} />
                   <Route path="projects" element={<ProjectSettings />} />
-                  <Route
-                    path="organizations"
-                    element={<OrganizationSettings />}
-                  />
                   <Route path="agents" element={<AgentSettings />} />
                   <Route path="mcp" element={<McpSettings />} />
                 </Route>

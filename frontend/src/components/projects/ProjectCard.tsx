@@ -16,19 +16,15 @@ import {
   Edit,
   ExternalLink,
   FolderOpen,
-  Link2,
   MoreHorizontal,
   Trash2,
-  Unlink,
 } from 'lucide-react';
 import { Project } from 'shared/types';
 import { useEffect, useRef } from 'react';
 import { useOpenProjectInEditor } from '@/hooks/useOpenProjectInEditor';
 import { useNavigateWithSearch } from '@/hooks';
 import { projectsApi } from '@/lib/api';
-import { LinkProjectDialog } from '@/components/dialogs/projects/LinkProjectDialog';
 import { useTranslation } from 'react-i18next';
-import { useProjectMutations } from '@/hooks/useProjectMutations';
 
 type Props = {
   project: Project;
@@ -49,16 +45,6 @@ function ProjectCard({
   const ref = useRef<HTMLDivElement>(null);
   const handleOpenInEditor = useOpenProjectInEditor(project);
   const { t } = useTranslation('projects');
-
-  const { unlinkProject } = useProjectMutations({
-    onUnlinkSuccess: () => {
-      fetchProjects();
-    },
-    onUnlinkError: (error) => {
-      console.error('Failed to unlink project:', error);
-      setError('Failed to unlink project');
-    },
-  });
 
   useEffect(() => {
     if (isFocused && ref.current) {
@@ -90,26 +76,6 @@ function ProjectCard({
 
   const handleOpenInIDE = () => {
     handleOpenInEditor();
-  };
-
-  const handleLinkProject = async () => {
-    try {
-      await LinkProjectDialog.show({
-        projectId: project.id,
-        projectName: project.name,
-      });
-    } catch (error) {
-      console.error('Failed to link project:', error);
-    }
-  };
-
-  const handleUnlinkProject = () => {
-    const confirmed = window.confirm(
-      `Are you sure you want to unlink "${project.name}"? The local project will remain, but it will no longer be linked to the remote project.`
-    );
-    if (confirmed) {
-      unlinkProject.mutate(project.id);
-    }
   };
 
   return (
@@ -148,27 +114,6 @@ function ProjectCard({
                   <FolderOpen className="mr-2 h-4 w-4" />
                   {t('openInIDE')}
                 </DropdownMenuItem>
-                {project.remote_project_id ? (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleUnlinkProject();
-                    }}
-                  >
-                    <Unlink className="mr-2 h-4 w-4" />
-                    {t('unlinkFromOrganization')}
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLinkProject();
-                    }}
-                  >
-                    <Link2 className="mr-2 h-4 w-4" />
-                    {t('linkToOrganization')}
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();

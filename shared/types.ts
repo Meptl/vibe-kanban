@@ -172,7 +172,7 @@ export type TagSearchParams = { search: string | null, };
 
 export type TokenResponse = { access_token: string, expires_at: string | null, };
 
-export type UserSystemInfo = { config: Config, login_status: LoginStatus, environment: Environment, 
+export type UserSystemInfo = { config: Config, environment: Environment, 
 /**
  * Capabilities supported per executor (e.g., { "CLAUDE_CODE": ["SESSION_FORK"] })
  */
@@ -211,8 +211,6 @@ export type OpenEditorRequest = { editor_type: string | null, file_path: string 
 export type OpenEditorResponse = { url: string | null, };
 
 export type AssignSharedTaskRequest = { new_assignee_user_id: string | null, };
-
-export type ShareTaskResponse = { shared_task_id: string, };
 
 export type CreateAndStartTaskRequest = { task: CreateTask, executor_profile_id: ExecutorProfileId, base_branch: string, };
 

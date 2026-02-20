@@ -102,7 +102,6 @@ fn generate_types_content() -> String {
         server::routes::task_attempts::OpenEditorRequest::decl(),
         server::routes::task_attempts::OpenEditorResponse::decl(),
         server::routes::shared_tasks::AssignSharedTaskRequest::decl(),
-        server::routes::tasks::ShareTaskResponse::decl(),
         server::routes::tasks::CreateAndStartTaskRequest::decl(),
         server::routes::task_attempts::pr::CreateGitHubPrRequest::decl(),
         server::routes::images::ImageResponse::decl(),

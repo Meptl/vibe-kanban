@@ -58,7 +58,6 @@ import TaskAttemptPanel from '@/components/panels/TaskAttemptPanel';
 import TaskPanel from '@/components/panels/TaskPanel';
 import SharedTaskPanel from '@/components/panels/SharedTaskPanel';
 import TodoPanel from '@/components/tasks/TodoPanel';
-import { useAuth } from '@/hooks';
 import { NewCard, NewCardHeader } from '@/components/ui/new-card';
 import {
   Breadcrumb,
@@ -147,7 +146,6 @@ export function ProjectTasks() {
   const [selectedSharedTaskId, setSelectedSharedTaskId] = useState<
     string | null
   >(null);
-  const { userId } = useAuth();
 
   const {
     projectId,
@@ -361,16 +359,6 @@ export function ProjectTasks() {
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const showSharedTasks = searchParams.get('shared') !== 'off';
 
-  useEffect(() => {
-    if (showSharedTasks) return;
-    if (!selectedSharedTaskId) return;
-    const sharedTask = sharedTasksById[selectedSharedTaskId];
-    if (sharedTask && sharedTask.assignee_user_id === userId) {
-      return;
-    }
-    setSelectedSharedTaskId(null);
-  }, [selectedSharedTaskId, sharedTasksById, showSharedTasks, userId]);
-
   const kanbanColumns = useMemo(() => {
     const columns: Record<TaskStatus, KanbanColumnItem[]> = {
       todo: [],
@@ -403,16 +391,6 @@ export function ProjectTasks() {
         return;
       }
 
-      const isSharedAssignedElsewhere =
-        !showSharedTasks &&
-        !!sharedTask &&
-        !!sharedTask.assignee_user_id &&
-        sharedTask.assignee_user_id !== userId;
-
-      if (isSharedAssignedElsewhere) {
-        return;
-      }
-
       columns[statusKey].push({
         type: 'task',
         task,
@@ -430,8 +408,7 @@ export function ProjectTasks() {
         if (!matchesSearch(sharedTask.title, sharedTask.description)) {
           return;
         }
-        const shouldIncludeShared =
-          showSharedTasks || sharedTask.assignee_user_id === userId;
+        const shouldIncludeShared = showSharedTasks;
         if (!shouldIncludeShared) {
           return;
         }
@@ -460,7 +437,6 @@ export function ProjectTasks() {
     sharedOnlyByStatus,
     sharedTasksById,
     showSharedTasks,
-    userId,
   ]);
 
   const visibleTasksByStatus = useMemo(() => {

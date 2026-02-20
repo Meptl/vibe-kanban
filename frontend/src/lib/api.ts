@@ -19,7 +19,6 @@ import {
   Project,
   CreateProject,
   SearchResult,
-  ShareTaskResponse,
   Task,
   TaskAttempt,
   TaskRelationships,
@@ -81,6 +80,8 @@ import {
   QueueStatus,
   PrCommentsResponse,
 } from 'shared/types';
+
+type ShareTaskResponse = { shared_task_id: string };
 
 export class ApiError<E = unknown> extends Error {
   public status?: number;
