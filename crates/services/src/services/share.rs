@@ -1,16 +1,12 @@
 mod config;
 mod publisher;
-mod status;
 
 pub use config::ShareConfig;
 pub use publisher::{SharePublisher, SharedTaskDetails};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{
-    RemoteClientError,
-    services::{git::GitServiceError, github::GitHubServiceError},
-};
+use crate::services::{git::GitServiceError, github::GitHubServiceError};
 
 #[derive(Debug, Error)]
 pub enum ShareError {
@@ -46,6 +42,4 @@ pub enum ShareError {
     InvalidUserId,
     #[error("invalid organization ID format")]
     InvalidOrganizationId,
-    #[error(transparent)]
-    RemoteClientError(#[from] RemoteClientError),
 }

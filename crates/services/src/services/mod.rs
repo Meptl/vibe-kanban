@@ -1,5 +1,4 @@
 pub mod approvals;
-pub mod auth;
 pub mod config;
 pub mod container;
 pub mod diff_stream;
@@ -12,9 +11,7 @@ pub mod git;
 pub mod github;
 pub mod image;
 pub mod notification;
-pub mod oauth_credentials;
 pub mod pr_monitor;
 pub mod queued_message;
-pub mod remote_client;
 pub mod share;
 pub mod worktree_manager;

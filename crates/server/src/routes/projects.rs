@@ -19,7 +19,6 @@ use services::services::{
     file_ranker::FileRanker,
     file_search_cache::{CacheError, SearchMode, SearchQuery},
     git::GitBranch,
-    remote_client::CreateRemoteProjectPayload,
 };
 use ts_rs::TS;
 use utils::{
@@ -64,22 +63,18 @@ pub async fn get_project_branches(
 }
 
 pub async fn link_project_to_existing_remote(
-    Extension(project): Extension<Project>,
-    State(deployment): State<DeploymentImpl>,
-    Json(payload): Json<LinkToExistingRequest>,
+    Extension(_project): Extension<Project>,
+    State(_deployment): State<DeploymentImpl>,
+    Json(_payload): Json<LinkToExistingRequest>,
 ) -> Result<ResponseJson<ApiResponse<Project>>, ApiError> {
-    let client = deployment.remote_client()?;
-
-    let remote_project = client.get_project(payload.remote_project_id).await?;
-
-    let updated_project = apply_remote_project_link(&deployment, project, remote_project).await?;
-
-    Ok(ResponseJson(ApiResponse::success(updated_project)))
+    Err(ApiError::Conflict(
+        "Remote project linking is not available in local mode.".to_string(),
+    ))
 }
 
 pub async fn create_and_link_remote_project(
-    Extension(project): Extension<Project>,
-    State(deployment): State<DeploymentImpl>,
+    Extension(_project): Extension<Project>,
+    State(_deployment): State<DeploymentImpl>,
     Json(payload): Json<CreateRemoteProjectRequest>,
 ) -> Result<ResponseJson<ApiResponse<Project>>, ApiError> {
     let repo_name = payload.name.trim().to_string();
@@ -89,19 +84,9 @@ pub async fn create_and_link_remote_project(
         ));
     }
 
-    let client = deployment.remote_client()?;
-
-    let remote_project = client
-        .create_project(&CreateRemoteProjectPayload {
-            organization_id: payload.organization_id,
-            name: repo_name,
-            metadata: None,
-        })
-        .await?;
-
-    let updated_project = apply_remote_project_link(&deployment, project, remote_project).await?;
-
-    Ok(ResponseJson(ApiResponse::success(updated_project)))
+    Err(ApiError::Conflict(
+        "Remote project linking is not available in local mode.".to_string(),
+    ))
 }
 
 pub async fn unlink_project(
@@ -128,60 +113,21 @@ pub async fn unlink_project(
 }
 
 pub async fn get_remote_project_by_id(
-    State(deployment): State<DeploymentImpl>,
-    Path(remote_project_id): Path<Uuid>,
+    State(_deployment): State<DeploymentImpl>,
+    Path(_remote_project_id): Path<Uuid>,
 ) -> Result<ResponseJson<ApiResponse<RemoteProject>>, ApiError> {
-    let client = deployment.remote_client()?;
-
-    let remote_project = client.get_project(remote_project_id).await?;
-
-    Ok(ResponseJson(ApiResponse::success(remote_project)))
+    Err(ApiError::Conflict(
+        "Remote project lookup is not available in local mode.".to_string(),
+    ))
 }
 
 pub async fn get_project_remote_members(
-    State(deployment): State<DeploymentImpl>,
-    Extension(project): Extension<Project>,
+    State(_deployment): State<DeploymentImpl>,
+    Extension(_project): Extension<Project>,
 ) -> Result<ResponseJson<ApiResponse<RemoteProjectMembersResponse>>, ApiError> {
-    let remote_project_id = project.remote_project_id.ok_or_else(|| {
-        ApiError::Conflict("Project is not linked to a remote project".to_string())
-    })?;
-
-    let client = deployment.remote_client()?;
-
-    let remote_project = client.get_project(remote_project_id).await?;
-    let members = client
-        .list_members(remote_project.organization_id)
-        .await?
-        .members;
-
-    Ok(ResponseJson(ApiResponse::success(
-        RemoteProjectMembersResponse {
-            organization_id: remote_project.organization_id,
-            members,
-        },
-    )))
-}
-
-async fn apply_remote_project_link(
-    deployment: &DeploymentImpl,
-    project: Project,
-    remote_project: RemoteProject,
-) -> Result<Project, ApiError> {
-    let pool = &deployment.db().pool;
-
-    if project.remote_project_id.is_some() {
-        return Err(ApiError::Conflict(
-            "Project is already linked to a remote project. Unlink it first.".to_string(),
-        ));
-    }
-
-    Project::set_remote_project_id(pool, project.id, Some(remote_project.id)).await?;
-
-    let updated_project = Project::find_by_id(pool, project.id)
-        .await?
-        .ok_or(ProjectError::ProjectNotFound)?;
-
-    Ok(updated_project)
+    Err(ApiError::Conflict(
+        "Remote project members are not available in local mode.".to_string(),
+    ))
 }
 
 pub async fn create_project(

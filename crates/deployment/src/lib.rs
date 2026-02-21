@@ -15,7 +15,6 @@ use futures::{StreamExt, TryStreamExt};
 use git2::Error as Git2Error;
 use services::services::{
     approvals::Approvals,
-    auth::AuthContext,
     config::{Config, ConfigError},
     container::{ContainerError, ContainerService},
     events::{EventError, EventService},
@@ -96,8 +95,6 @@ pub trait Deployment: Clone + Send + Sync + 'static {
     fn approvals(&self) -> &Approvals;
 
     fn queued_message_service(&self) -> &QueuedMessageService;
-
-    fn auth_context(&self) -> &AuthContext;
 
     fn share_publisher(&self) -> Result<SharePublisher, RemoteClientNotConfigured>;
 
