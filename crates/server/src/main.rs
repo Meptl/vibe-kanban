@@ -1,16 +1,12 @@
 use anyhow::{self, Error as AnyhowError};
-use deployment::{Deployment, DeploymentError};
+use local_deployment::{Deployment, DeploymentError};
 use server::{DeploymentImpl, routes};
 use services::services::container::ContainerService;
 use sqlx::Error as SqlxError;
 use strip_ansi_escapes::strip;
 use thiserror::Error;
 use tracing_subscriber::{EnvFilter, prelude::*};
-use utils::{
-    assets::asset_dir,
-    browser::open_browser,
-    port_file::write_port_file,
-};
+use utils::{assets::asset_dir, browser::open_browser, port_file::write_port_file};
 
 #[derive(Debug, Error)]
 pub enum VibeKanbanError {

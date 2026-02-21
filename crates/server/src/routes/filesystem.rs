@@ -4,7 +4,7 @@ use axum::{
     response::Json as ResponseJson,
     routing::get,
 };
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::filesystem::{DirectoryEntry, DirectoryListResponse, FilesystemError};
 use utils::response::ApiResponse;

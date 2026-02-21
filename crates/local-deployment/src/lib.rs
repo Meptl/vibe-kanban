@@ -1,29 +1,174 @@
 use std::{collections::HashMap, sync::Arc};
 
+use anyhow::Error as AnyhowError;
 use async_trait::async_trait;
-use db::DBService;
-use deployment::{Deployment, DeploymentError, RemoteClientNotConfigured};
-use executors::profile::ExecutorConfigs;
+use axum::response::sse::Event;
+use db::{
+    DBService,
+    models::{
+        project::{CreateProject, Project},
+        task_attempt::TaskAttemptError,
+    },
+};
+use executors::{executors::ExecutorError, profile::ExecutorConfigs};
+use futures::{StreamExt, TryStreamExt};
+use git2::Error as Git2Error;
 use services::services::{
     approvals::Approvals,
-    config::{Config, load_config_from_file, save_config_to_file},
-    container::ContainerService,
-    events::EventService,
+    config::{Config, ConfigError, load_config_from_file, save_config_to_file},
+    container::{ContainerError, ContainerService},
+    events::{EventError, EventService},
     file_search_cache::FileSearchCache,
-    filesystem::FilesystemService,
-    git::GitService,
-    image::ImageService,
+    filesystem::{FilesystemError, FilesystemService},
+    filesystem_watcher::FilesystemWatcherError,
+    git::{GitService, GitServiceError},
+    image::{ImageError, ImageService},
+    pr_monitor::PrMonitorService,
     queued_message::QueuedMessageService,
     share::{ShareConfig, SharePublisher},
+    worktree_manager::WorktreeError,
 };
+use sqlx::{Error as SqlxError, types::Uuid};
+use thiserror::Error;
 use tokio::sync::RwLock;
 use utils::{assets::config_path, msg_store::MsgStore};
-use uuid::Uuid;
 
 use crate::container::LocalContainerService;
 mod command;
 pub mod container;
 mod copy;
+
+#[derive(Debug, Clone, Copy, Error)]
+#[error("Remote client not configured")]
+pub struct RemoteClientNotConfigured;
+
+#[derive(Debug, Error)]
+pub enum DeploymentError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Sqlx(#[from] SqlxError),
+    #[error(transparent)]
+    Git2(#[from] Git2Error),
+    #[error(transparent)]
+    GitServiceError(#[from] GitServiceError),
+    #[error(transparent)]
+    FilesystemWatcherError(#[from] FilesystemWatcherError),
+    #[error(transparent)]
+    TaskAttempt(#[from] TaskAttemptError),
+    #[error(transparent)]
+    Container(#[from] ContainerError),
+    #[error(transparent)]
+    Executor(#[from] ExecutorError),
+    #[error(transparent)]
+    Image(#[from] ImageError),
+    #[error(transparent)]
+    Filesystem(#[from] FilesystemError),
+    #[error(transparent)]
+    Worktree(#[from] WorktreeError),
+    #[error(transparent)]
+    Event(#[from] EventError),
+    #[error(transparent)]
+    Config(#[from] ConfigError),
+    #[error("Remote client not configured")]
+    RemoteClientNotConfigured,
+    #[error(transparent)]
+    Other(#[from] AnyhowError),
+}
+
+#[async_trait]
+pub trait Deployment: Clone + Send + Sync + 'static {
+    async fn new() -> Result<Self, DeploymentError>;
+
+    fn user_id(&self) -> &str;
+
+    fn config(&self) -> &Arc<RwLock<Config>>;
+
+    fn db(&self) -> &DBService;
+
+    fn container(&self) -> &impl ContainerService;
+
+    fn git(&self) -> &GitService;
+
+    fn image(&self) -> &ImageService;
+
+    fn filesystem(&self) -> &FilesystemService;
+
+    fn events(&self) -> &EventService;
+
+    fn file_search_cache(&self) -> &Arc<FileSearchCache>;
+
+    fn approvals(&self) -> &Approvals;
+
+    fn queued_message_service(&self) -> &QueuedMessageService;
+
+    fn share_publisher(&self) -> Result<SharePublisher, RemoteClientNotConfigured>;
+
+    async fn spawn_pr_monitor_service(&self) -> tokio::task::JoinHandle<()> {
+        let db = self.db().clone();
+        let publisher = self.share_publisher().ok();
+        PrMonitorService::spawn(db, publisher).await
+    }
+
+    async fn trigger_auto_project_setup(&self) {
+        let soft_timeout_ms = 2_000;
+        let hard_timeout_ms = 2_300;
+        let project_count = Project::count(&self.db().pool).await.unwrap_or(0);
+
+        if project_count == 0
+            && let Ok(repos) = self
+                .filesystem()
+                .list_common_git_repos(soft_timeout_ms, hard_timeout_ms, Some(4))
+                .await
+        {
+            for repo in repos.into_iter().take(3) {
+                let create_data = CreateProject {
+                    name: repo.name,
+                    git_repo_path: repo.path.to_string_lossy().to_string(),
+                    use_existing_repo: true,
+                    setup_script: None,
+                    dev_script: None,
+                    cleanup_script: None,
+                    copy_files: None,
+                    parallel_setup_script: None,
+                };
+
+                if let Err(e) = self.git().ensure_main_branch_exists(&repo.path) {
+                    tracing::error!("Failed to ensure main branch exists: {}", e);
+                    continue;
+                }
+
+                let project_id = Uuid::new_v4();
+                match Project::create(&self.db().pool, &create_data, project_id).await {
+                    Ok(_) => {
+                        tracing::info!(
+                            "Auto-created project '{}' from {}",
+                            create_data.name,
+                            create_data.git_repo_path
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to auto-create project '{}': {}",
+                            create_data.name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    async fn stream_events(
+        &self,
+    ) -> futures::stream::BoxStream<'static, Result<Event, std::io::Error>> {
+        self.events()
+            .msg_store()
+            .history_plus_stream()
+            .map_ok(|m| m.to_sse_event())
+            .boxed()
+    }
+}
 
 #[derive(Clone)]
 pub struct LocalDeployment {
@@ -188,7 +333,6 @@ impl Deployment for LocalDeployment {
     fn share_publisher(&self) -> Result<SharePublisher, RemoteClientNotConfigured> {
         self.share_publisher.clone()
     }
-
 }
 
 impl LocalDeployment {

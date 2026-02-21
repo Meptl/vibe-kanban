@@ -8,11 +8,11 @@ use axum::{
     response::Json as ResponseJson,
     routing::{get, post},
 };
-use db::models::{
-    project::{CreateProject, Project, ProjectError, SearchMatchType, SearchResult, UpdateProject},
+use db::models::project::{
+    CreateProject, Project, ProjectError, SearchMatchType, SearchResult, UpdateProject,
 };
-use deployment::Deployment;
 use ignore::WalkBuilder;
+use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::{
     file_ranker::FileRanker,
@@ -305,7 +305,6 @@ pub async fn delete_project(
             if rows_affected == 0 {
                 Err(StatusCode::NOT_FOUND)
             } else {
-
                 Ok(ResponseJson(ApiResponse::success(())))
             }
         }

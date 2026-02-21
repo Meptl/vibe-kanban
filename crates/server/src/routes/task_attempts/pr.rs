@@ -6,12 +6,12 @@ use db::models::{
     task::{Task, TaskStatus},
     task_attempt::{TaskAttempt, TaskAttemptError},
 };
-use deployment::Deployment;
 use executors::actions::{
     ExecutorAction, ExecutorActionType, coding_agent_follow_up::CodingAgentFollowUpRequest,
     coding_agent_initial::CodingAgentInitialRequest,
 };
 use git2::BranchType;
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::{
     container::ContainerService,

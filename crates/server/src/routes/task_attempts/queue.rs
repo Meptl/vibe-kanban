@@ -3,7 +3,7 @@ use axum::{
     response::Json as ResponseJson, routing::get,
 };
 use db::models::{scratch::DraftFollowUpData, task_attempt::TaskAttempt};
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::queued_message::QueueStatus;
 use ts_rs::TS;

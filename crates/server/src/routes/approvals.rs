@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     routing::post,
 };
-use deployment::Deployment;
+use local_deployment::Deployment;
 use utils::approvals::{ApprovalResponse, ApprovalStatus};
 
 use crate::DeploymentImpl;

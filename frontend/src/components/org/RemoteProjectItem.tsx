@@ -8,8 +8,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Unlink } from 'lucide-react';
-import type { Project, RemoteProject } from 'shared/types';
+import type { Project } from 'shared/types';
 import { useTranslation } from 'react-i18next';
+
+interface RemoteProject {
+  id: string;
+  name: string;
+}
 
 interface RemoteProjectItemProps {
   remoteProject: RemoteProject;

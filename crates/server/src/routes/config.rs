@@ -8,7 +8,6 @@ use axum::{
     response::{Json as ResponseJson, Response},
     routing::{get, put},
 };
-use deployment::{Deployment, DeploymentError};
 use executors::{
     executors::{
         AvailabilityInfo, BaseAgentCapability, BaseCodingAgent, StandardCodingAgentExecutor,
@@ -16,6 +15,7 @@ use executors::{
     mcp_config::{McpConfig, read_agent_config, write_agent_config},
     profile::{ExecutorConfigs, ExecutorProfileId},
 };
+use local_deployment::{Deployment, DeploymentError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use services::services::config::{

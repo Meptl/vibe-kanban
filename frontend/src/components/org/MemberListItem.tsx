@@ -8,10 +8,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Trash2 } from 'lucide-react';
-import type { OrganizationMemberWithProfile, MemberRole } from 'shared/types';
-import { MemberRole as MemberRoleEnum } from 'shared/types';
 import { useTranslation } from 'react-i18next';
 import { UserAvatar } from '@/components/tasks/UserAvatar';
+
+type MemberRole = 'ADMIN' | 'MEMBER';
+
+interface OrganizationMemberWithProfile {
+  user_id: string;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  role: MemberRole;
+}
+
+const MemberRoleEnum: Record<MemberRole, MemberRole> = {
+  ADMIN: 'ADMIN',
+  MEMBER: 'MEMBER',
+};
 
 interface MemberListItemProps {
   member: OrganizationMemberWithProfile;

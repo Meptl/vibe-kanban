@@ -25,7 +25,6 @@ use db::models::{
     task::{Task, TaskRelationships, TaskStatus},
     task_attempt::{CreateTaskAttempt, TaskAttempt, TaskAttemptError},
 };
-use deployment::Deployment;
 use executors::{
     actions::{
         ExecutorAction, ExecutorActionType,
@@ -36,6 +35,7 @@ use executors::{
     profile::{ExecutorConfigs, ExecutorProfileId},
 };
 use git2::BranchType;
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::{
     container::ContainerService,
@@ -1124,10 +1124,7 @@ pub async fn get_task_attempt_children(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<TaskRelationships>>, StatusCode> {
     match Task::find_relationships_for_attempt(&deployment.db().pool, &task_attempt).await {
-        Ok(relationships) => {
-
-            Ok(ResponseJson(ApiResponse::success(relationships)))
-        }
+        Ok(relationships) => Ok(ResponseJson(ApiResponse::success(relationships))),
         Err(e) => {
             tracing::error!(
                 "Failed to fetch relationships for task attempt {}: {}",
@@ -1282,10 +1279,7 @@ pub async fn gh_cli_setup_handler(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<ExecutionProcess, GhCliSetupError>>, ApiError> {
     match gh_cli_setup::run_gh_cli_setup(&deployment, &task_attempt).await {
-        Ok(execution_process) => {
-
-            Ok(ResponseJson(ApiResponse::success(execution_process)))
-        }
+        Ok(execution_process) => Ok(ResponseJson(ApiResponse::success(execution_process))),
         Err(ApiError::Executor(ExecutorError::ExecutableNotFound { program }))
             if program == "brew" =>
         {

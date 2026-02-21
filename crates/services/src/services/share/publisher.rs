@@ -1,10 +1,7 @@
 use db::{
     DBService,
-    models::{
-        task::{Task, TaskStatus},
-    },
+    models::task::{Task, TaskStatus},
 };
-use remote::routes::tasks::SharedTaskResponse;
 use uuid::Uuid;
 
 use super::ShareError;
@@ -21,6 +18,11 @@ pub struct SharedTaskDetails {
     pub title: String,
     pub description: Option<String>,
     pub status: TaskStatus,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, ts_rs::TS)]
+pub struct SharedTaskResponse {
+    pub task: SharedTaskDetails,
 }
 
 impl SharePublisher {

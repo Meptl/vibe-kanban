@@ -2,7 +2,6 @@ use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessRunReason},
     task_attempt::{TaskAttempt, TaskAttemptError},
 };
-use deployment::Deployment;
 use executors::actions::ExecutorAction;
 #[cfg(unix)]
 use executors::{
@@ -12,6 +11,7 @@ use executors::{
     },
     executors::cursor::CursorAgent,
 };
+use local_deployment::Deployment;
 use services::services::container::ContainerService;
 
 use crate::{error::ApiError, routes::task_attempts::ensure_worktree_path};

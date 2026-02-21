@@ -1,17 +1,20 @@
 import { useCallback, useMemo } from 'react';
 import { useJsonPatchWsStream } from './useJsonPatchWsStream';
-import type {
-  SharedTask,
-  TaskStatus,
-  TaskWithAttemptStatus,
-} from 'shared/types';
+import type { TaskStatus, TaskWithAttemptStatus } from 'shared/types';
 
-export type SharedTaskRecord = SharedTask & {
+export interface SharedTaskRecord {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TaskStatus;
+  created_at: string;
+  updated_at?: string;
   remote_project_id: string;
+  assignee_user_id?: string | null;
   assignee_first_name?: string | null;
   assignee_last_name?: string | null;
   assignee_username?: string | null;
-};
+}
 
 type TasksState = {
   tasks: Record<string, TaskWithAttemptStatus>;

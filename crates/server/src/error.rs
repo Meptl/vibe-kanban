@@ -8,9 +8,9 @@ use db::models::{
     execution_process::ExecutionProcessError, project::ProjectError, scratch::ScratchError,
     task_attempt::TaskAttemptError,
 };
-use deployment::{DeploymentError, RemoteClientNotConfigured};
 use executors::executors::ExecutorError;
 use git2::Error as Git2Error;
+use local_deployment::{DeploymentError, RemoteClientNotConfigured};
 use services::services::{
     config::{ConfigError, EditorOpenError},
     container::ContainerError,

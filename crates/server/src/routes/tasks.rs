@@ -17,9 +17,9 @@ use db::models::{
     task::{CreateTask, Task, TaskWithAttemptStatus, UpdateTask},
     task_attempt::{CreateTaskAttempt, TaskAttempt},
 };
-use deployment::Deployment;
 use executors::profile::ExecutorProfileId;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::{
     container::ContainerService,

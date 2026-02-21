@@ -6,7 +6,7 @@ use axum::{
     routing::{get, put},
 };
 use db::models::tag::{CreateTag, Tag, UpdateTag};
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::Deserialize;
 use ts_rs::TS;
 use utils::response::ApiResponse;

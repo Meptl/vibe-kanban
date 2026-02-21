@@ -23,7 +23,6 @@ use db::{
         task_attempt::TaskAttempt,
     },
 };
-use deployment::{DeploymentError, RemoteClientNotConfigured};
 use executors::{
     actions::{
         Executable, ExecutorAction, ExecutorActionType,
@@ -64,7 +63,7 @@ use utils::{
 };
 use uuid::Uuid;
 
-use crate::{command, copy};
+use crate::{DeploymentError, RemoteClientNotConfigured, command, copy};
 
 #[derive(Clone)]
 pub struct LocalContainerService {
@@ -479,7 +478,6 @@ impl LocalContainerService {
                         container.finalize_task(publisher.as_ref().ok(), &ctx).await;
                     }
                 }
-
             }
 
             // Now that commit/next-action/finalization steps for this process are complete,

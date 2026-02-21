@@ -7,8 +7,8 @@ use axum::{
     },
     routing::get,
 };
-use deployment::Deployment;
 use futures_util::TryStreamExt;
+use local_deployment::Deployment;
 
 use crate::DeploymentImpl;
 

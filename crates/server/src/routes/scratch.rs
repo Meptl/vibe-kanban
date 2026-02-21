@@ -8,8 +8,8 @@ use axum::{
     routing::get,
 };
 use db::models::scratch::{CreateScratch, Scratch, ScratchType, UpdateScratch};
-use deployment::Deployment;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use local_deployment::Deployment;
 use serde::Deserialize;
 use utils::response::ApiResponse;
 use uuid::Uuid;

@@ -1,4 +1,4 @@
-use deployment::Deployment;
+use local_deployment::Deployment;
 use services::services::container::ContainerService;
 
 use crate::error::ApiError;

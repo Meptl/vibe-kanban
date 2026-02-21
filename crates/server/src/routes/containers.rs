@@ -5,7 +5,7 @@ use axum::{
     routing::get,
 };
 use db::models::task_attempt::{TaskAttempt, TaskAttemptContext};
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utils::response::ApiResponse;

@@ -10,7 +10,7 @@ use axum::{
     routing::{get, post},
 };
 use db::models::{task::Task, task_attempt::TaskAttempt};
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::image::ImageError;
 use tokio::fs::File;

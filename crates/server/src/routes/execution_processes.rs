@@ -12,8 +12,8 @@ use axum::{
 use db::models::execution_process::{
     ExecutionProcess, ExecutionProcessError, ExecutionProcessStatus,
 };
-use deployment::Deployment;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::container::ContainerService;
 use utils::{log_msg::LogMsg, response::ApiResponse};

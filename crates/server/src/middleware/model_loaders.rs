@@ -8,7 +8,7 @@ use db::models::{
     execution_process::ExecutionProcess, project::Project, tag::Tag, task::Task,
     task_attempt::TaskAttempt,
 };
-use deployment::Deployment;
+use local_deployment::Deployment;
 use uuid::Uuid;
 
 use crate::DeploymentImpl;

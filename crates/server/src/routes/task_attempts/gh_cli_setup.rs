@@ -2,7 +2,6 @@ use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessRunReason},
     task_attempt::TaskAttempt,
 };
-use deployment::Deployment;
 use executors::actions::ExecutorAction;
 #[cfg(unix)]
 use executors::{
@@ -12,6 +11,7 @@ use executors::{
     },
     executors::ExecutorError,
 };
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::container::ContainerService;
 use ts_rs::TS;

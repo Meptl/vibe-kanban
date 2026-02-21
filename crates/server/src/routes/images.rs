@@ -13,7 +13,7 @@ use db::models::{
     image::{Image, TaskImage},
     task::Task,
 };
-use deployment::Deployment;
+use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::image::ImageError;
 use sqlx::Error as SqlxError;

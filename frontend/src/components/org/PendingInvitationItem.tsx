@@ -1,9 +1,21 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { Invitation } from 'shared/types';
-import { MemberRole } from 'shared/types';
 import { useTranslation } from 'react-i18next';
 import { Trash2 } from 'lucide-react';
+
+type MemberRole = 'ADMIN' | 'MEMBER';
+
+interface Invitation {
+  id: string;
+  email: string;
+  created_at: string;
+  role: MemberRole;
+}
+
+const MemberRole = {
+  ADMIN: 'ADMIN',
+  MEMBER: 'MEMBER',
+} as const;
 
 interface PendingInvitationItemProps {
   invitation: Invitation;
