@@ -190,15 +190,6 @@ impl Default for GitHubConfig {
     }
 }
 
-impl GitHubConfig {
-    pub fn token(&self) -> Option<String> {
-        self.pat
-            .as_deref()
-            .or(self.oauth_token.as_deref())
-            .map(|s| s.to_string())
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, TS, EnumString)]
 #[ts(use_ts_enum)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
