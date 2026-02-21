@@ -48,7 +48,6 @@ async fn main() -> Result<(), VibeKanbanError> {
         .backfill_before_head_commits()
         .await
         .map_err(DeploymentError::from)?;
-    deployment.spawn_pr_monitor_service().await;
     // Pre-warm file search cache for most active projects
     let deployment_for_cache = deployment.clone();
     tokio::spawn(async move {

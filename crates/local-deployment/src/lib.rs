@@ -23,7 +23,6 @@ use services::services::{
     filesystem_watcher::FilesystemWatcherError,
     git::{GitService, GitServiceError},
     image::{ImageError, ImageService},
-    pr_monitor::PrMonitorService,
     queued_message::QueuedMessageService,
     share::{ShareConfig, SharePublisher},
     worktree_manager::WorktreeError,
@@ -103,12 +102,6 @@ pub trait Deployment: Clone + Send + Sync + 'static {
     fn queued_message_service(&self) -> &QueuedMessageService;
 
     fn share_publisher(&self) -> Result<SharePublisher, RemoteClientNotConfigured>;
-
-    async fn spawn_pr_monitor_service(&self) -> tokio::task::JoinHandle<()> {
-        let db = self.db().clone();
-        let publisher = self.share_publisher().ok();
-        PrMonitorService::spawn(db, publisher).await
-    }
 
     async fn trigger_auto_project_setup(&self) {
         let soft_timeout_ms = 2_000;

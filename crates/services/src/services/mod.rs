@@ -11,7 +11,6 @@ pub mod git;
 pub mod github;
 pub mod image;
 pub mod notification;
-pub mod pr_monitor;
 pub mod queued_message;
 pub mod share;
 pub mod worktree_manager;
