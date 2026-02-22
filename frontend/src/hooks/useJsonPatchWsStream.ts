@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { applyPatch } from 'rfc6902';
 import type { Operation } from 'rfc6902';
+import { applyUpsertPatch } from '@/utils/jsonPatch';
 
 type WsJsonPatchMsg = { JsonPatch: Operation[] };
 type WsFinishedMsg = { finished: boolean };
@@ -124,7 +124,7 @@ export const useJsonPatchWsStream = <T extends object>(
             const next = structuredClone(current);
 
             // Apply patch (mutates the clone in place)
-            applyPatch(next, filtered);
+            applyUpsertPatch(next, filtered);
 
             dataRef.current = next;
             setData(next);
