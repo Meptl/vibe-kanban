@@ -436,9 +436,8 @@ impl Codex {
                     .resume_conversation(rollout_path.clone(), overrides)
                     .await?;
                 tracing::debug!(
-                    "resuming session using rollout file {}, response {:?}",
-                    rollout_path.display(),
-                    response
+                    "resuming session using rollout file {}",
+                    rollout_path.display()
                 );
                 let conversation_id = response.conversation_id;
                 client.register_session(&conversation_id).await?;
