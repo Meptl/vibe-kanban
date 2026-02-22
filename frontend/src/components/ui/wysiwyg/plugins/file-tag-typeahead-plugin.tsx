@@ -28,6 +28,9 @@ const VIEWPORT_MARGIN = 8;
 const VERTICAL_GAP = 4;
 const VERTICAL_GAP_ABOVE = 24;
 const MIN_WIDTH = 320;
+const MAX_HEIGHT_STABILITY_THRESHOLD = 10;
+
+type MenuPlacement = ReturnType<typeof getMenuPosition>;
 
 function getMenuPosition(anchorEl: HTMLElement) {
   const rect = anchorEl.getBoundingClientRect();
@@ -69,6 +72,7 @@ export function FileTagTypeaheadPlugin({ projectId }: { projectId?: string }) {
   const [options, setOptions] = useState<FileTagOption[]>([]);
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lastSelectedIndexRef = useRef<number>(-1);
+  const lastPlacementRef = useRef<MenuPlacement | null>(null);
 
   const onQueryChange = useCallback(
     (query: string | null) => {
@@ -132,9 +136,18 @@ export function FileTagTypeaheadPlugin({ projectId }: { projectId?: string }) {
       ) => {
         if (!anchorRef.current) return null;
 
-        const { top, bottom, left, maxHeight } = getMenuPosition(
+        const nextPlacement = getMenuPosition(
           anchorRef.current
         );
+        const previousPlacement = lastPlacementRef.current;
+        const maxHeightStable =
+          previousPlacement &&
+          Math.abs(nextPlacement.maxHeight - previousPlacement.maxHeight) <
+            MAX_HEIGHT_STABILITY_THRESHOLD;
+        const placement = maxHeightStable
+          ? { ...nextPlacement, maxHeight: previousPlacement.maxHeight }
+          : nextPlacement;
+        lastPlacementRef.current = placement;
 
         // Scroll selected item into view when navigating with arrow keys
         if (
@@ -157,10 +170,10 @@ export function FileTagTypeaheadPlugin({ projectId }: { projectId?: string }) {
           <div
             className="fixed bg-background border border-border rounded-md shadow-lg overflow-y-auto"
             style={{
-              top,
-              bottom,
-              left,
-              maxHeight,
+              top: placement.top,
+              bottom: placement.bottom,
+              left: placement.left,
+              maxHeight: placement.maxHeight,
               minWidth: MIN_WIDTH,
               zIndex: 10000,
             }}
