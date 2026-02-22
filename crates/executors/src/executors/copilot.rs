@@ -187,16 +187,12 @@ impl StandardCodingAgentExecutor for Copilot {
     /// Parses both stderr and stdout logs for Copilot executor using PlainTextLogProcessor.
     ///
     /// Each entry is converted into an `AssistantMessage` or `ErrorMessage` and emitted as patches.
-    fn normalize_logs(
-        &self,
-        msg_store: Arc<MsgStore>,
-        _worktree_path: &Path,
-    ) -> Vec<tokio::task::JoinHandle<()>> {
+    fn normalize_logs(&self, msg_store: Arc<MsgStore>, _worktree_path: &Path) {
         let entry_index_counter = EntryIndexProvider::start_from(&msg_store);
-        let h1 = normalize_stderr_logs(msg_store.clone(), entry_index_counter.clone());
+        normalize_stderr_logs(msg_store.clone(), entry_index_counter.clone());
 
         // Normalize Agent logs
-        let h2 = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut stdout_lines = msg_store.stdout_lines_stream();
 
             let mut processor = Self::create_simple_stdout_normalizer(entry_index_counter);
@@ -212,7 +208,6 @@ impl StandardCodingAgentExecutor for Copilot {
                 }
             }
         });
-        vec![h1, h2]
     }
 
     // MCP configuration methods
