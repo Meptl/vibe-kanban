@@ -5,6 +5,7 @@ import {
   COMMAND_PRIORITY_LOW,
   $getSelection,
   $isRangeSelection,
+  $setSelection,
   $createParagraphNode,
 } from 'lexical';
 import {
@@ -73,9 +74,11 @@ export function PasteMarkdownPlugin({ transformers }: Props) {
           }
 
           // CMD+V: Convert markdown and insert at cursor
+          const clonedSelection = selection.clone();
           try {
             const tempContainer = $createParagraphNode();
             $convertFromMarkdownString(plainText, transformers, tempContainer);
+            $setSelection(clonedSelection);
 
             const nodes = tempContainer.getChildren();
             if (nodes.length === 0) {
@@ -88,6 +91,7 @@ export function PasteMarkdownPlugin({ transformers }: Props) {
             selection.insertNodes(nodes);
           } catch {
             // Fallback to raw text on error
+            $setSelection(clonedSelection);
             selection.insertRawText(plainText);
           }
         });
