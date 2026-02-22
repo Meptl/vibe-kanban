@@ -3,6 +3,7 @@ pub mod config;
 pub mod container;
 pub mod diff_stream;
 pub mod events;
+pub mod execution_process;
 pub mod file_ranker;
 pub mod file_search_cache;
 pub mod filesystem;

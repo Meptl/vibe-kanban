@@ -5,9 +5,7 @@ use std::{
 };
 
 use git2::{Repository, build::CheckoutBuilder};
-use services::services::{
-    git::{DiffTarget, GitCli, GitService},
-};
+use services::services::git::{DiffTarget, GitCli, GitService};
 use tempfile::TempDir;
 use utils::diff::DiffChangeKind;
 

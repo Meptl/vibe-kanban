@@ -8,8 +8,7 @@ use std::{
 use git2::{Error as GitError, Repository};
 use thiserror::Error;
 use tracing::{debug, info, trace};
-use utils::path::normalize_macos_private_alias;
-use utils::shell::resolve_executable_path;
+use utils::{path::normalize_macos_private_alias, shell::resolve_executable_path};
 
 use super::git::{GitService, GitServiceError};
 

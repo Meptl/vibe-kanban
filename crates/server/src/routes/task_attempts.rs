@@ -45,9 +45,7 @@ use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::{
-    DeploymentImpl,
-    error::ApiError,
-    middleware::load_task_attempt_middleware,
+    DeploymentImpl, error::ApiError, middleware::load_task_attempt_middleware,
     routes::task_attempts::util::ensure_worktree_path,
 };
 

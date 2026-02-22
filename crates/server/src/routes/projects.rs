@@ -18,10 +18,7 @@ use services::services::{
     file_search_cache::{CacheError, SearchMode, SearchQuery},
     git::GitBranch,
 };
-use utils::{
-    path::expand_tilde,
-    response::ApiResponse,
-};
+use utils::{path::expand_tilde, response::ApiResponse};
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError, middleware::load_project_middleware};
