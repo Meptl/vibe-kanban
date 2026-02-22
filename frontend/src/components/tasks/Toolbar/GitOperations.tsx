@@ -189,7 +189,7 @@ function GitOperations({
   const isVertical = layout === 'vertical';
 
   const containerClasses = isVertical
-    ? 'grid grid-cols-1 items-start gap-3 overflow-hidden'
+    ? 'grid grid-cols-1 items-start gap-3'
     : 'grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 overflow-hidden';
 
   const settingsBtnClasses = isVertical
@@ -204,7 +204,13 @@ function GitOperations({
     <div className="w-full border-b py-2">
       <div className={containerClasses}>
         {/* Left: Branch flow */}
-        <div className="flex items-center gap-2 min-w-0 shrink-0 overflow-hidden">
+        <div
+          className={
+            isVertical
+              ? 'flex flex-wrap items-center gap-2 min-w-0'
+              : 'flex items-center gap-2 min-w-0 shrink-0 overflow-hidden'
+          }
+        >
           {/* Task branch chip */}
           <TooltipProvider>
             <Tooltip>
@@ -223,7 +229,13 @@ function GitOperations({
           <ArrowRight className="hidden sm:inline h-4 w-4 text-muted-foreground" />
 
           {/* Target branch chip + change button */}
-          <div className="flex items-center gap-1 min-w-0">
+          <div
+            className={
+              isVertical
+                ? 'flex flex-wrap items-center gap-1 min-w-0'
+                : 'flex items-center gap-1 min-w-0'
+            }
+          >
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -266,7 +278,13 @@ function GitOperations({
         </div>
 
         {/* Center: Status chips */}
-        <div className="flex items-center gap-2 text-xs min-w-0 overflow-hidden whitespace-nowrap">
+        <div
+          className={
+            isVertical
+              ? 'flex flex-wrap items-center gap-2 text-xs min-w-0'
+              : 'flex items-center gap-2 text-xs min-w-0 overflow-hidden whitespace-nowrap'
+          }
+        >
           {(() => {
             const commitsAhead = branchStatus?.commits_ahead ?? 0;
             const commitsBehind = branchStatus?.commits_behind ?? 0;
@@ -324,7 +342,7 @@ function GitOperations({
               );
             }
             if (chips.length > 0)
-              return <div className="flex items-center gap-2">{chips}</div>;
+              return <div className="flex flex-wrap items-center gap-2">{chips}</div>;
 
             return (
               <span className="text-muted-foreground hidden sm:inline">
