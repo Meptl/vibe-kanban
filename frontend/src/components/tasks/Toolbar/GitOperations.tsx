@@ -21,7 +21,6 @@ import type {
   TaskAttempt,
 } from 'shared/types';
 import { ChangeTargetBranchDialog } from '@/components/dialogs/tasks/ChangeTargetBranchDialog';
-import { RebaseDialog } from '@/components/dialogs/tasks/RebaseDialog';
 import { useTranslation } from 'react-i18next';
 import { useGitOperations } from '@/hooks/useGitOperations';
 
@@ -140,42 +139,13 @@ function GitOperations({
     }
   };
 
-  const handleRebaseWithNewBranchAndUpstream = async (
-    newBaseBranch: string,
-    selectedUpstream: string
-  ) => {
+  const handleRebaseClick = async () => {
     setRebasing(true);
     try {
-      await git.actions.rebase({
-        newBaseBranch: newBaseBranch,
-        oldBaseBranch: selectedUpstream,
-      });
+      await git.actions.rebase({});
+      // Uses backend defaults for old/new base, which resolve to the current target branch.
     } finally {
       setRebasing(false);
-    }
-  };
-
-  const handleRebaseDialogOpen = async () => {
-    try {
-      const defaultTargetBranch = selectedAttempt.target_branch;
-      const result = await RebaseDialog.show({
-        branches,
-        isRebasing: rebasing,
-        initialTargetBranch: defaultTargetBranch,
-        initialUpstreamBranch: defaultTargetBranch,
-      });
-      if (
-        result.action === 'confirmed' &&
-        result.branchName &&
-        result.upstreamBranch
-      ) {
-        await handleRebaseWithNewBranchAndUpstream(
-          result.branchName,
-          result.upstreamBranch
-        );
-      }
-    } catch (error) {
-      // User cancelled - do nothing
     }
   };
 
@@ -381,7 +351,7 @@ function GitOperations({
             </Button>
 
             <Button
-              onClick={handleRebaseDialogOpen}
+              onClick={handleRebaseClick}
               disabled={
                 rebasing ||
                 isAttemptRunning ||
