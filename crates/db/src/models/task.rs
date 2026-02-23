@@ -214,8 +214,9 @@ ORDER BY t.created_at DESC"#,
         sqlx::query_as::<_, Task>(
             r#"SELECT id, project_id, title, description, status, parent_task_attempt, created_at, updated_at
                FROM tasks
-               WHERE status = $1 AND COALESCE(cancelled_at, updated_at) <= $2
-               ORDER BY COALESCE(cancelled_at, updated_at) ASC"#,
+               WHERE status = $1
+                 AND datetime(COALESCE(cancelled_at, updated_at)) <= datetime($2)
+               ORDER BY datetime(COALESCE(cancelled_at, updated_at)) ASC"#,
         )
         .bind(TaskStatus::Cancelled)
         .bind(max_cancelled_at)
