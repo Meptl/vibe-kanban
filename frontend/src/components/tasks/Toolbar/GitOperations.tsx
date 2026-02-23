@@ -86,7 +86,8 @@ function GitOperations({
   const mergeInfo = useMemo(() => {
     if (!branchStatus?.merges)
       return {
-        hasMerged: false,
+        hasMergedHistory: false,
+        isCurrentHeadMerged: false,
       };
 
     const merges = branchStatus.merges.filter(
@@ -95,10 +96,22 @@ function GitOperations({
         (m.type === 'pr' && m.pr_info.status === 'merged')
     );
 
+    const mergedCommitShas = new Set(
+      merges
+        .map((m) => {
+          if (m.type === 'direct') return m.merge_commit;
+          return m.pr_info.merge_commit_sha;
+        })
+        .filter((sha): sha is string => Boolean(sha))
+    );
+
     return {
-      hasMerged: merges.length > 0,
+      hasMergedHistory: merges.length > 0,
+      isCurrentHeadMerged: Boolean(
+        branchStatus.head_oid && mergedCommitShas.has(branchStatus.head_oid)
+      ),
     };
-  }, [branchStatus?.merges]);
+  }, [branchStatus?.head_oid, branchStatus?.merges]);
 
   const mergeButtonLabel = useMemo(() => {
     if (mergeSuccess) return t('git.states.merged');
@@ -287,7 +300,10 @@ function GitOperations({
               );
             }
 
-            if (mergeInfo.hasMerged) {
+            if (
+              mergeInfo.isCurrentHeadMerged &&
+              (branchStatus?.commits_ahead ?? 0) === 0
+            ) {
               return (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100/70 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                   <CheckCircle className="h-3.5 w-3.5" />
@@ -297,6 +313,17 @@ function GitOperations({
             }
 
             const chips: React.ReactNode[] = [];
+            if (mergeInfo.hasMergedHistory) {
+              chips.push(
+                <span
+                  key="merged-history"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100/40 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {t('git.states.merged')}
+                </span>
+              );
+            }
             if (commitsAhead > 0) {
               chips.push(
                 <span
@@ -338,7 +365,6 @@ function GitOperations({
             <Button
               onClick={handleMergeClick}
               disabled={
-                mergeInfo.hasMerged ||
                 merging ||
                 hasConflictsCalculated ||
                 isAttemptRunning ||
@@ -357,7 +383,6 @@ function GitOperations({
             <Button
               onClick={handleRebaseDialogOpen}
               disabled={
-                mergeInfo.hasMerged ||
                 rebasing ||
                 isAttemptRunning ||
                 hasConflictsCalculated
