@@ -67,10 +67,8 @@ impl NotificationService {
     }
 
     fn message_with_url(message: &str, url: Option<&str>) -> String {
-        match url {
-            Some(url) => format!("{message}\n{url}"),
-            None => message.to_string(),
-        }
+        let _ = url;
+        message.to_string()
     }
 
     /// Play a system sound notification across platforms
