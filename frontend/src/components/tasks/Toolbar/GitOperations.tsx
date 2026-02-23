@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   GitBranch as GitBranchIcon,
-  Upload,
   RefreshCw,
   Settings,
   AlertTriangle,
@@ -60,10 +59,8 @@ function GitOperations({
 
   // Local state for git operations
   const [merging, setMerging] = useState(false);
-  const [pushing, setPushing] = useState(false);
   const [rebasing, setRebasing] = useState(false);
   const [mergeSuccess, setMergeSuccess] = useState(false);
-  const [pushSuccess, setPushSuccess] = useState(false);
 
   // Target branch change handlers
   const handleChangeTargetBranchClick = async (newBranch: string) => {
@@ -114,26 +111,9 @@ function GitOperations({
     return t('git.states.rebase');
   }, [rebasing, t]);
 
-  const pushButtonLabel = useMemo(() => {
-    if (pushSuccess) return t('git.states.pushed');
-    if (pushing) return t('git.states.pushing');
-    return t('git.states.push');
-  }, [pushSuccess, pushing, t]);
-
   const handleMergeClick = async () => {
     // Directly perform merge without checking branch status
     await performMerge();
-  };
-
-  const handlePushClick = async () => {
-    try {
-      setPushing(true);
-      await git.actions.push();
-      setPushSuccess(true);
-      setTimeout(() => setPushSuccess(false), 2000);
-    } finally {
-      setPushing(false);
-    }
   };
 
   const performMerge = async () => {
@@ -363,7 +343,6 @@ function GitOperations({
                 hasConflictsCalculated ||
                 isAttemptRunning ||
                 ((branchStatus.commits_ahead ?? 0) === 0 &&
-                  !pushSuccess &&
                   !mergeSuccess)
               }
               variant="outline"
@@ -373,27 +352,6 @@ function GitOperations({
             >
               <GitBranchIcon className="h-3.5 w-3.5" />
               <span className="truncate max-w-[10ch]">{mergeButtonLabel}</span>
-            </Button>
-
-            <Button
-              onClick={handlePushClick}
-              disabled={
-                mergeInfo.hasMerged ||
-                pushing ||
-                isAttemptRunning ||
-                hasConflictsCalculated ||
-                ((branchStatus.commits_ahead ?? 0) === 0 &&
-                  (branchStatus.remote_commits_ahead ?? 0) === 0 &&
-                  !pushSuccess &&
-                  !mergeSuccess)
-              }
-              variant="outline"
-              size="xs"
-              className="border-info text-info hover:bg-info gap-1 shrink-0"
-              aria-label={pushButtonLabel}
-            >
-              <Upload className="h-3.5 w-3.5" />
-              <span className="truncate max-w-[10ch]">{pushButtonLabel}</span>
             </Button>
 
             <Button

@@ -72,7 +72,6 @@ fn generate_types_content() -> String {
         server::routes::task_attempts::RunAgentSetupResponse::decl(),
         server::routes::task_attempts::RebaseTaskAttemptRequest::decl(),
         server::routes::task_attempts::GitOperationError::decl(),
-        server::routes::task_attempts::PushError::decl(),
         server::routes::task_attempts::BranchStatus::decl(),
         server::routes::task_attempts::RunScriptError::decl(),
         services::services::filesystem::DirectoryEntry::decl(),

@@ -52,7 +52,6 @@ import {
   ScratchType,
   CreateScratch,
   UpdateScratch,
-  PushError,
   QueueStatus,
 } from 'shared/types';
 
@@ -396,23 +395,6 @@ export const attemptsApi = {
       }
     );
     return handleApiResponse<void>(response);
-  },
-
-  push: async (attemptId: string): Promise<Result<void, PushError>> => {
-    const response = await makeRequest(`/api/task-attempts/${attemptId}/push`, {
-      method: 'POST',
-    });
-    return handleApiResponseAsResult<void, PushError>(response);
-  },
-
-  forcePush: async (attemptId: string): Promise<Result<void, PushError>> => {
-    const response = await makeRequest(
-      `/api/task-attempts/${attemptId}/push/force`,
-      {
-        method: 'POST',
-      }
-    );
-    return handleApiResponseAsResult<void, PushError>(response);
   },
 
   rebase: async (
