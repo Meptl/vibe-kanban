@@ -8,7 +8,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { DragEndEvent, Modifier } from '@dnd-kit/core';
+import type {
+  DragCancelEvent,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+  Modifier,
+} from '@dnd-kit/core';
 import {
   DndContext,
   PointerSensor,
@@ -25,7 +31,12 @@ import { Plus } from 'lucide-react';
 import type { ClientRect } from '@dnd-kit/core';
 import type { Transform } from '@dnd-kit/utilities';
 import { Button } from '../../button';
-export type { DragEndEvent } from '@dnd-kit/core';
+export type {
+  DragCancelEvent,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+} from '@dnd-kit/core';
 
 export type Status = {
   id: string;
@@ -268,12 +279,18 @@ const restrictToFirstScrollableAncestorCustom: Modifier = (args) => {
 export type KanbanProviderProps = {
   children: ReactNode;
   onDragEnd: (event: DragEndEvent) => void;
+  onDragStart?: (event: DragStartEvent) => void;
+  onDragOver?: (event: DragOverEvent) => void;
+  onDragCancel?: (event: DragCancelEvent) => void;
   className?: string;
 };
 
 export const KanbanProvider = ({
   children,
   onDragEnd,
+  onDragStart,
+  onDragOver,
+  onDragCancel,
   className,
 }: KanbanProviderProps) => {
   const sensors = useSensors(
@@ -286,6 +303,9 @@ export const KanbanProvider = ({
     <DndContext
       collisionDetection={rectIntersection}
       onDragEnd={onDragEnd}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragCancel={onDragCancel}
       sensors={sensors}
       modifiers={[restrictToFirstScrollableAncestorCustom]}
     >

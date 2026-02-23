@@ -44,7 +44,11 @@ import {
 import TaskKanbanBoard, {
   type KanbanColumnItem,
 } from '@/components/tasks/TaskKanbanBoard';
-import type { DragEndEvent } from '@/components/ui/shadcn-io/kanban';
+import type {
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+} from '@/components/ui/shadcn-io/kanban';
 import { useProjectTasks } from '@/hooks/useProjectTasks';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useHotkeysContext } from 'react-hotkeys-hook';
@@ -69,6 +73,11 @@ import { TaskPanelHeaderActions } from '@/components/panels/TaskPanelHeaderActio
 import type { TaskWithAttemptStatus, TaskStatus } from 'shared/types';
 
 type Task = TaskWithAttemptStatus;
+type DropPreview = {
+  status: TaskStatus;
+  index: number;
+  height?: number | null;
+} | null;
 
 const TASK_STATUSES = [
   'todo',
@@ -136,6 +145,7 @@ export function ProjectTasks() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isXL = useMediaQuery('(min-width: 1280px)');
   const isMobile = !isXL;
+  const [dropPreview, setDropPreview] = useState<DropPreview>(null);
 
   const {
     projectId,
@@ -619,6 +629,7 @@ export function ProjectTasks() {
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
+      setDropPreview(null);
       const { active, over } = event;
       if (!over || !active.data.current) return;
 
@@ -709,6 +720,78 @@ export function ProjectTasks() {
     [branches, config?.executor_profile, navigateWithSearch, projectId, tasksById]
   );
 
+  const clearDropPreview = useCallback(() => {
+    setDropPreview(null);
+  }, []);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    void event;
+    setDropPreview(null);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const { active, over } = event;
+      if (!over) {
+        setDropPreview(null);
+        return;
+      }
+
+      const activeTaskId = active.id as string;
+      const task = tasksById[activeTaskId];
+      if (!task) {
+        setDropPreview(null);
+        return;
+      }
+
+      if (!TASK_STATUSES.includes(String(over.id) as TaskStatus)) {
+        setDropPreview(null);
+        return;
+      }
+
+      const targetStatus = normalizeStatus(String(over.id));
+      const currentStatus = normalizeStatus(task.status);
+
+      if (targetStatus === currentStatus) {
+        setDropPreview(null);
+        return;
+      }
+
+      const draggedCreatedAt = new Date(task.created_at).getTime();
+      const targetItems = kanbanColumns[targetStatus].filter(
+        (item) => item.task.id !== activeTaskId
+      );
+
+      let insertIndex = targetItems.length;
+      for (let i = 0; i < targetItems.length; i++) {
+        const itemTimestamp = new Date(targetItems[i].task.created_at).getTime();
+        if (draggedCreatedAt > itemTimestamp) {
+          insertIndex = i;
+          break;
+        }
+      }
+
+      setDropPreview((prev) => {
+        const nextHeight = active.rect.current.initial?.height ?? prev?.height;
+        if (
+          prev &&
+          prev.status === targetStatus &&
+          prev.index === insertIndex &&
+          prev.height === nextHeight
+        ) {
+          return prev;
+        }
+
+        return {
+          status: targetStatus,
+          index: insertIndex,
+          height: nextHeight,
+        };
+      });
+    },
+    [kanbanColumns, tasksById]
+  );
+
   const isInitialTasksLoad = isLoading && tasks.length === 0;
 
   if (projectError) {
@@ -771,10 +854,14 @@ export function ProjectTasks() {
         <TaskKanbanBoard
           columns={kanbanColumns}
           onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragCancel={clearDropPreview}
           onViewTaskDetails={handleViewTaskDetails}
           selectedTaskId={selectedTask?.id}
           onCreateTask={handleCreateNewTask}
           projectId={projectId!}
+          dropPreview={dropPreview}
         />
       </div>
     );
