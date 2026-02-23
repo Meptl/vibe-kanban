@@ -25,6 +25,9 @@ export function Navbar() {
   const { projectId, project } = useProject();
   const { query, setQuery, active, clear, registerInputRef } = useSearch();
   const handleOpenInEditor = useOpenProjectInEditor(project || null);
+  const isTasksRoute = /^\/projects\/[^/]+\/tasks(?:\/.*)?$/.test(
+    location.pathname
+  );
 
   const setSearchBarRef = useCallback(
     (node: HTMLInputElement | null) => {
@@ -73,15 +76,17 @@ export function Navbar() {
                     onClick={handleOpenInIDE}
                     className="h-9 w-9"
                   />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    onClick={handleCreateTask}
-                    aria-label="Create new task"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                  {!isTasksRoute && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9"
+                      onClick={handleCreateTask}
+                      aria-label="Create new task"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <NavDivider />
               </>

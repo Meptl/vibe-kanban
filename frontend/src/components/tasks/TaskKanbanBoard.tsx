@@ -52,7 +52,7 @@ function TaskKanbanBoard({
                 )
               }
               color={statusBoardColors[statusKey]}
-              onAddTask={onCreateTask}
+              onAddTask={statusKey === 'todo' ? onCreateTask : undefined}
               leadingIcon={
                 statusKey === 'cancelled' ? (
                   <Trash2
@@ -61,7 +61,7 @@ function TaskKanbanBoard({
                   />
                 ) : undefined
               }
-              hideAddTask={statusKey === 'cancelled'}
+              hideAddTask={statusKey !== 'todo'}
             />
             <KanbanCards>
               {items.map((item, index) => {
