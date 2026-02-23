@@ -21,18 +21,55 @@ impl NotificationService {
 
     /// Send both sound and push notifications if enabled
     pub async fn notify(&self, title: &str, message: &str) {
+        self.notify_with_url(title, message, None).await;
+    }
+
+    /// Send both sound and push notifications if enabled, with optional source URL
+    pub async fn notify_with_url(&self, title: &str, message: &str, url: Option<&str>) {
         let config = self.config.read().await.notifications.clone();
-        Self::send_notification(&config, title, message).await;
+        Self::send_notification(&config, title, message, url).await;
     }
 
     /// Internal method to send notifications with a given config
-    async fn send_notification(config: &NotificationConfig, title: &str, message: &str) {
+    async fn send_notification(
+        config: &NotificationConfig,
+        title: &str,
+        message: &str,
+        url: Option<&str>,
+    ) {
         if config.sound_enabled {
             Self::play_sound_notification(&config.sound_file).await;
         }
 
         if config.push_enabled {
-            Self::send_push_notification(title, message).await;
+            Self::send_push_notification(title, message, url).await;
+        }
+    }
+
+    pub fn frontend_base_url() -> String {
+        let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let host = match host.as_str() {
+            "0.0.0.0" | "::" => "127.0.0.1",
+            _ => host.as_str(),
+        };
+        let port = std::env::var("FRONTEND_PORT").unwrap_or_else(|_| "3000".to_string());
+        format!("http://{host}:{port}")
+    }
+
+    pub fn attempt_url(project_id: uuid::Uuid, task_id: uuid::Uuid, attempt_id: uuid::Uuid) -> String {
+        format!(
+            "{}/projects/{}/tasks/{}/attempts/{}",
+            Self::frontend_base_url(),
+            project_id,
+            task_id,
+            attempt_id
+        )
+    }
+
+    fn message_with_url(message: &str, url: Option<&str>) -> String {
+        match url {
+            Some(url) => format!("{message}\n{url}"),
+            None => message.to_string(),
         }
     }
 
@@ -95,18 +132,19 @@ impl NotificationService {
     }
 
     /// Send a cross-platform push notification
-    async fn send_push_notification(title: &str, message: &str) {
+    async fn send_push_notification(title: &str, message: &str, url: Option<&str>) {
         if cfg!(target_os = "macos") {
-            Self::send_macos_notification(title, message).await;
+            Self::send_macos_notification(title, message, url).await;
         } else if cfg!(target_os = "linux") && !utils::is_wsl2() {
-            Self::send_linux_notification(title, message).await;
+            Self::send_linux_notification(title, message, url).await;
         } else if cfg!(target_os = "windows") || (cfg!(target_os = "linux") && utils::is_wsl2()) {
-            Self::send_windows_notification(title, message).await;
+            Self::send_windows_notification(title, message, url).await;
         }
     }
 
     /// Send macOS notification using osascript
-    async fn send_macos_notification(title: &str, message: &str) {
+    async fn send_macos_notification(title: &str, message: &str, url: Option<&str>) {
+        let message = Self::message_with_url(message, url);
         let script = format!(
             r#"display notification "{message}" with title "{title}" sound name "Glass""#,
             message = message.replace('"', r#"\""#),
@@ -120,19 +158,33 @@ impl NotificationService {
     }
 
     /// Send Linux notification using notify-rust
-    async fn send_linux_notification(title: &str, message: &str) {
+    async fn send_linux_notification(title: &str, message: &str, url: Option<&str>) {
         use notify_rust::Notification;
 
         let title = title.to_string();
-        let message = message.to_string();
+        let message = Self::message_with_url(message, url);
+        let url = url.map(ToOwned::to_owned);
 
         let _handle = tokio::task::spawn_blocking(move || {
-            if let Err(e) = Notification::new()
-                .summary(&title)
-                .body(&message)
-                .timeout(10000)
-                .show()
-            {
+            let mut notification = Notification::new();
+            notification.summary(&title).body(&message).timeout(10000);
+
+            if let Some(url) = url {
+                notification.action("open", "Open");
+
+                match notification.show() {
+                    Ok(handle) => {
+                        handle.wait_for_action(|action| {
+                            if action == "open" {
+                                let _ = std::process::Command::new("xdg-open").arg(&url).spawn();
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to send Linux notification: {}", e);
+                    }
+                }
+            } else if let Err(e) = notification.show() {
                 tracing::error!("Failed to send Linux notification: {}", e);
             }
         });
@@ -140,7 +192,7 @@ impl NotificationService {
     }
 
     /// Send Windows/WSL notification using PowerShell toast script
-    async fn send_windows_notification(title: &str, message: &str) {
+    async fn send_windows_notification(title: &str, message: &str, url: Option<&str>) {
         let script_path = match utils::get_powershell_script().await {
             Ok(path) => path,
             Err(e) => {
@@ -170,6 +222,11 @@ impl NotificationService {
             .arg(title)
             .arg("-Message")
             .arg(message)
+            .args(
+                url.into_iter()
+                    .flat_map(|value| ["-Url", value])
+                    .collect::<Vec<_>>(),
+            )
             .spawn();
     }
 

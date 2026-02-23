@@ -177,7 +177,10 @@ pub trait ContainerService {
                 return;
             }
         };
-        self.notification_service().notify(&title, &message).await;
+        let url = NotificationService::attempt_url(ctx.task.project_id, ctx.task.id, ctx.task_attempt.id);
+        self.notification_service()
+            .notify_with_url(&title, &message, Some(&url))
+            .await;
     }
 
     /// Cleanup executions marked as running in the db, call at startup
