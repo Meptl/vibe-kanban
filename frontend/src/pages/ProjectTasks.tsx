@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -56,7 +56,6 @@ import { TasksLayout, type LayoutMode } from '@/components/layout/TasksLayout';
 import { PreviewPanel } from '@/components/panels/PreviewPanel';
 import { DiffsPanel } from '@/components/panels/DiffsPanel';
 import TaskAttemptPanel from '@/components/panels/TaskAttemptPanel';
-import TaskPanel from '@/components/panels/TaskPanel';
 import TodoPanel from '@/components/tasks/TodoPanel';
 import { NewCard, NewCardHeader } from '@/components/ui/new-card';
 import {
@@ -68,7 +67,6 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { AttemptHeaderActions } from '@/components/panels/AttemptHeaderActions';
-import { TaskPanelHeaderActions } from '@/components/panels/TaskPanelHeaderActions';
 import { useTaskNotifications } from '@/contexts/TaskNotificationsContext';
 
 import type { TaskWithAttemptStatus, TaskStatus } from 'shared/types';
@@ -192,7 +190,7 @@ export function ProjectTasks() {
     clearTaskNotifications(projectId, selectedTask.id);
   }, [projectId, selectedTask, clearTaskNotifications]);
 
-  const isPanelOpen = Boolean(taskId && selectedTask);
+  const isPanelOpen = Boolean(taskId && selectedTask && attemptId);
 
   const { config, updateAndSaveConfig, loading } = useUserSystem();
 
@@ -249,6 +247,16 @@ export function ProjectTasks() {
     [navigate, searchParams]
   );
 
+  const navigateToAttemptDiffs = useCallback(
+    (pathname: string, options?: { replace?: boolean }) => {
+      const params = new URLSearchParams(searchParams);
+      params.set('view', 'diffs');
+      const search = params.toString();
+      navigate({ pathname, search: search ? `?${search}` : '' }, options);
+    },
+    [navigate, searchParams]
+  );
+
   useEffect(() => {
     if (!projectId || !taskId) return;
     if (!isLatest) return;
@@ -259,7 +267,7 @@ export function ProjectTasks() {
       return;
     }
 
-    navigateWithSearch(paths.attempt(projectId, taskId, latestAttemptId), {
+    navigateToAttemptDiffs(paths.attempt(projectId, taskId, latestAttemptId), {
       replace: true,
     });
   }, [
@@ -268,8 +276,8 @@ export function ProjectTasks() {
     isLatest,
     isAttemptsLoading,
     latestAttemptId,
-    navigate,
     navigateWithSearch,
+    navigateToAttemptDiffs,
   ]);
 
   useEffect(() => {
@@ -282,6 +290,7 @@ export function ProjectTasks() {
   const effectiveAttemptId = attemptId === 'latest' ? undefined : attemptId;
   const isTaskView = !!taskId && !effectiveAttemptId;
   const { data: attempt } = useTaskAttempt(effectiveAttemptId);
+  const taskRouteResolutionRef = useRef<string | null>(null);
 
   const { data: branchStatus } = useBranchStatus(attempt?.id);
   const [branches, setBranches] = useState<GitBranch[]>([]);
@@ -399,11 +408,7 @@ export function ProjectTasks() {
     });
 
     return columns;
-  }, [
-    hasSearch,
-    normalizedSearch,
-    tasks,
-  ]);
+  }, [hasSearch, normalizedSearch, tasks]);
 
   const visibleTasksByStatus = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = {
@@ -537,17 +542,57 @@ export function ProjectTasks() {
   }, [projectId, navigate]);
 
   const handleViewTaskDetails = useCallback(
-    (task: Task, attemptIdToShow?: string) => {
+    async (task: Task, attemptIdToShow?: string) => {
       if (!projectId) return;
 
-      if (attemptIdToShow) {
-        navigateWithSearch(paths.attempt(projectId, task.id, attemptIdToShow));
-      } else {
-        navigateWithSearch(`${paths.task(projectId, task.id)}/attempts/latest`);
+      try {
+        if (attemptIdToShow) {
+          navigateToAttemptDiffs(
+            paths.attempt(projectId, task.id, attemptIdToShow)
+          );
+          return;
+        }
+
+        const existingAttempts = await attemptsApi.getAll(task.id);
+        if (existingAttempts.length === 0) {
+          openTaskForm({ mode: 'edit', projectId, task });
+          return;
+        }
+
+        navigateToAttemptDiffs(
+          `${paths.task(projectId, task.id)}/attempts/latest`
+        );
+      } catch (error) {
+        console.error('Failed to open task details:', error);
       }
     },
-    [projectId, navigateWithSearch]
+    [projectId, navigateToAttemptDiffs]
   );
+
+  useEffect(() => {
+    if (!projectId || !isTaskView || !selectedTask) return;
+    if (taskRouteResolutionRef.current === selectedTask.id) return;
+
+    taskRouteResolutionRef.current = selectedTask.id;
+
+    void (async () => {
+      try {
+        const existingAttempts = await attemptsApi.getAll(selectedTask.id);
+        if (existingAttempts.length === 0) {
+          openTaskForm({ mode: 'edit', projectId, task: selectedTask });
+          navigate(paths.projectTasks(projectId), { replace: true });
+          return;
+        }
+
+        navigateToAttemptDiffs(
+          `${paths.task(projectId, selectedTask.id)}/attempts/latest`,
+          { replace: true }
+        );
+      } catch (error) {
+        console.error('Failed to resolve task attempt for navigation:', error);
+      }
+    })();
+  }, [isTaskView, navigate, navigateToAttemptDiffs, projectId, selectedTask]);
 
   const selectNextTask = useCallback(() => {
     if (selectedTask) {
@@ -659,7 +704,11 @@ export function ProjectTasks() {
           image_ids: null,
         });
 
-        if (newStatus !== 'inprogress' || !projectId || !config?.executor_profile) {
+        if (
+          newStatus !== 'inprogress' ||
+          !projectId ||
+          !config?.executor_profile
+        ) {
           return;
         }
 
@@ -695,7 +744,9 @@ export function ProjectTasks() {
         let parentBranch: string | null = null;
         if (task.parent_task_attempt) {
           try {
-            const parentAttempt = await attemptsApi.get(task.parent_task_attempt);
+            const parentAttempt = await attemptsApi.get(
+              task.parent_task_attempt
+            );
             parentBranch = parentAttempt.branch ?? null;
           } catch (err) {
             console.warn('Failed to load parent attempt branch:', err);
@@ -724,12 +775,23 @@ export function ProjectTasks() {
           base_branch: baseBranch,
         });
 
-        navigateWithSearch(paths.attempt(projectId, task.id, newAttempt.id));
+        navigateToAttemptDiffs(
+          paths.attempt(projectId, task.id, newAttempt.id)
+        );
       } catch (err) {
-        console.error('Failed to update task status / auto-start attempt:', err);
+        console.error(
+          'Failed to update task status / auto-start attempt:',
+          err
+        );
       }
     },
-    [branches, config?.executor_profile, navigateWithSearch, projectId, tasksById]
+    [
+      branches,
+      config?.executor_profile,
+      navigateToAttemptDiffs,
+      projectId,
+      tasksById,
+    ]
   );
 
   const clearDropPreview = useCallback(() => {
@@ -776,7 +838,9 @@ export function ProjectTasks() {
 
       let insertIndex = targetItems.length;
       for (let i = 0; i < targetItems.length; i++) {
-        const itemTimestamp = new Date(targetItems[i].task.created_at).getTime();
+        const itemTimestamp = new Date(
+          targetItems[i].task.created_at
+        ).getTime();
         if (draggedCreatedAt > itemTimestamp) {
           insertIndex = i;
           break;
@@ -878,70 +942,52 @@ export function ProjectTasks() {
       </div>
     );
 
-  const rightHeader = selectedTask ? (
-    <NewCardHeader
-      className="shrink-0"
-      actions={
-        isTaskView ? (
-          <TaskPanelHeaderActions
-            task={selectedTask}
-            onClose={() =>
-              navigate(`/projects/${projectId}/tasks`, { replace: true })
-            }
-          />
-        ) : (
+  const effectiveMode: LayoutMode = mode ?? (attempt ? 'diffs' : null);
+
+  const rightHeader =
+    selectedTask && attempt ? (
+      <NewCardHeader
+        className="shrink-0"
+        actions={
           <AttemptHeaderActions
-            mode={mode}
+            mode={effectiveMode}
             onModeChange={setMode}
             task={selectedTask}
-            attempt={attempt ?? null}
+            attempt={attempt}
             onClose={() =>
               navigate(`/projects/${projectId}/tasks`, { replace: true })
             }
           />
-        )
-      }
-    >
-      <div className="mx-auto w-full">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              {isTaskView ? (
-                <BreadcrumbPage>
-                  {truncateTitle(selectedTask?.title)}
-                </BreadcrumbPage>
-              ) : (
+        }
+      >
+        <div className="mx-auto w-full">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
                 <BreadcrumbLink
                   className="cursor-pointer hover:underline"
                   onClick={() =>
-                    navigateWithSearch(paths.task(projectId!, taskId!))
+                    navigate(paths.projectTasks(projectId!), { replace: true })
                   }
                 >
                   {truncateTitle(selectedTask?.title)}
                 </BreadcrumbLink>
-              )}
-            </BreadcrumbItem>
-            {!isTaskView && (
-              <>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>
-                    {attempt?.branch || 'Task Attempt'}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </>
-            )}
-          </BreadcrumbList>
-        </Breadcrumb>
-      </div>
-    </NewCardHeader>
-  ) : null;
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>
+                  {attempt.branch || 'Task Attempt'}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
+      </NewCardHeader>
+    ) : null;
 
-  const attemptContent = selectedTask ? (
-    <NewCard className="h-full min-h-0 flex flex-col bg-diagonal-lines bg-muted border-0">
-      {isTaskView ? (
-        <TaskPanel task={selectedTask} />
-      ) : (
+  const attemptContent =
+    selectedTask && attempt ? (
+      <NewCard className="h-full min-h-0 flex flex-col bg-diagonal-lines bg-muted border-0">
         <TaskAttemptPanel attempt={attempt} task={selectedTask}>
           {({ logs, followUp }) => (
             <>
@@ -964,15 +1010,14 @@ export function ProjectTasks() {
             </>
           )}
         </TaskAttemptPanel>
-      )}
-    </NewCard>
-  ) : null;
+      </NewCard>
+    ) : null;
 
   const auxContent =
     selectedTask && attempt ? (
       <div className="relative h-full w-full">
-        {mode === 'preview' && <PreviewPanel />}
-        {mode === 'diffs' && (
+        {effectiveMode === 'preview' && <PreviewPanel />}
+        {effectiveMode === 'diffs' && (
           <DiffsPanelContainer
             attempt={attempt}
             projectId={projectId!}
@@ -984,9 +1029,6 @@ export function ProjectTasks() {
     ) : (
       <div className="relative h-full w-full" />
     );
-
-  const effectiveMode: LayoutMode = mode;
-
   const attemptArea = (
     <GitOperationsProvider attemptId={attempt?.id}>
       <ClickedElementsProvider attempt={attempt}>
