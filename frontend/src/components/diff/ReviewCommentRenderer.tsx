@@ -67,11 +67,11 @@ export function ReviewCommentRenderer({
   }
 
   return (
-    <div className="border-y bg-background p-4">
+    <div className="border-y bg-background p-4 text-foreground">
       <WYSIWYGEditor
         value={comment.text}
         disabled={true}
-        className="text-sm"
+        className="text-sm text-foreground"
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
