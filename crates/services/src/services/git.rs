@@ -790,18 +790,8 @@ impl GitService {
                 // base branch is checked out somewhere - use CLI merge
                 let git_cli = GitCli::new();
 
-                // Safety check: base branch has no staged changes
-                if git_cli
-                    .has_staged_changes(&base_checkout_path)
-                    .map_err(|e| {
-                        GitServiceError::InvalidRepository(format!("git diff --cached failed: {e}"))
-                    })?
-                {
-                    return Err(GitServiceError::WorktreeDirty(
-                        base_branch_name.to_string(),
-                        "staged changes present".to_string(),
-                    ));
-                }
+                // Commit tracked local edits first so squash merge does not fail on a dirty base worktree.
+                self.auto_commit_tracked_changes_if_any(&base_checkout_path, "merge")?;
 
                 // Use CLI merge in base context
                 self.ensure_cli_commit_identity(&base_checkout_path)?;
@@ -942,6 +932,33 @@ impl GitService {
             Err(GitServiceError::WorktreeDirty(_, _)) => Ok(false),
             Err(e) => Err(e),
         }
+    }
+
+    /// Commit tracked/staged changes before operations that fail on dirty worktrees.
+    /// Untracked files are intentionally left untouched.
+    fn auto_commit_tracked_changes_if_any(
+        &self,
+        worktree_path: &Path,
+        operation_label: &str,
+    ) -> Result<(), GitServiceError> {
+        let git = GitCli::new();
+        let status = git
+            .get_worktree_status(worktree_path)
+            .map_err(|e| GitServiceError::InvalidRepository(format!("git status failed: {e}")))?;
+
+        if status.uncommitted_tracked == 0 {
+            return Ok(());
+        }
+
+        self.ensure_cli_commit_identity(worktree_path)?;
+        git.git(worktree_path, ["add", "-u"])
+            .map_err(|e| GitServiceError::InvalidRepository(format!("git add -u failed: {e}")))?;
+        git.commit(
+            worktree_path,
+            &format!("chore: auto-commit local changes before {operation_label}"),
+        )
+        .map_err(|e| GitServiceError::InvalidRepository(format!("git commit failed: {e}")))?;
+        Ok(())
     }
 
     /// Check if the worktree is clean (no uncommitted changes to tracked files)
@@ -1295,10 +1312,9 @@ impl GitService {
         let worktree_repo = Repository::open(worktree_path)?;
         let main_repo = self.open_repo(repo_path)?;
 
-        // Safety guard: never operate on a dirty worktree. This preserves any
-        // uncommitted changes to tracked files by failing fast instead of
-        // resetting or cherry-picking over them. Untracked files are allowed.
-        self.check_worktree_clean(&worktree_repo)?;
+        // Commit tracked local edits first so rebase can proceed without a dirty-worktree error.
+        // Untracked files are still left alone and protected by git CLI semantics.
+        self.auto_commit_tracked_changes_if_any(worktree_path, "rebase")?;
 
         // If a rebase is already in progress, refuse to proceed instead of
         // aborting (which might destroy user changes mid-rebase).

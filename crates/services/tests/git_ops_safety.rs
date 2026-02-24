@@ -429,7 +429,7 @@ fn rebase_preserves_untracked_files() {
 }
 
 #[test]
-fn rebase_aborts_on_uncommitted_tracked_changes() {
+fn rebase_auto_commits_uncommitted_tracked_changes() {
     let td = TempDir::new().unwrap();
     let (repo_path, worktree_path) = setup_repo_with_worktree(&td);
 
@@ -443,10 +443,17 @@ fn rebase_aborts_on_uncommitted_tracked_changes() {
         "old-base",
         "feature",
     );
-    assert!(res.is_err(), "rebase should fail on dirty worktree");
+    assert!(
+        res.is_ok(),
+        "rebase should auto-commit and succeed: {res:?}"
+    );
 
     let edited = fs::read_to_string(worktree_path.join("feat.txt")).unwrap();
     assert_eq!(edited, "feat change (edited)\n");
+    assert!(
+        service.is_worktree_clean(&worktree_path).unwrap(),
+        "tracked changes should be committed before rebase"
+    );
 }
 
 #[test]
@@ -552,7 +559,7 @@ fn merge_does_not_touch_tracked_uncommitted_changes_in_base_worktree() {
 }
 
 #[test]
-fn merge_refuses_with_staged_changes_on_base() {
+fn merge_auto_commits_staged_changes_on_base() {
     let td = TempDir::new().unwrap();
     let (repo_path, worktree_path) = setup_repo_with_worktree(&td);
     let s = GitService::new();
@@ -567,10 +574,16 @@ fn merge_refuses_with_staged_changes_on_base() {
     write_file(&repo_path, "staged.txt", "staged\n");
     add_path(&repo_path, "staged.txt");
     let res = s.merge_changes(&repo_path, &worktree_path, "feature", "main", "squash");
-    assert!(res.is_err(), "should refuse merge due to staged changes");
-    // staged file remains
+    assert!(
+        res.is_ok(),
+        "merge should auto-commit staged changes: {res:?}"
+    );
     let content = std::fs::read_to_string(repo_path.join("staged.txt")).unwrap();
     assert_eq!(content, "staged\n");
+    assert!(
+        s.is_worktree_clean(&repo_path).unwrap(),
+        "base worktree tracked changes should be committed before merge"
+    );
 }
 
 #[test]
