@@ -213,8 +213,18 @@ impl Codex {
         "npx -y @openai/codex@0.101.0"
     }
 
+    pub fn base_command_builder() -> CommandBuilder {
+        CommandBuilder::new(Self::base_command())
+            .extend_params(["-c"])
+            .extend_params([Self::vk_mcp_url_config_arg()])
+    }
+
+    fn vk_mcp_url_config_arg() -> &'static str {
+        "mcp_servers.vk.url=\"http://127.0.0.1:$MCP_PORT/mcp\""
+    }
+
     fn build_command_builder(&self) -> CommandBuilder {
-        let mut builder = CommandBuilder::new(Self::base_command());
+        let mut builder = Self::base_command_builder();
         builder = builder.extend_params(["app-server"]);
         if self.oss.unwrap_or(false) {
             builder = builder.extend_params(["--oss"]);

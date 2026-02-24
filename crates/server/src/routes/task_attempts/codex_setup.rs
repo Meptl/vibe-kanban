@@ -7,7 +7,7 @@ use executors::{
         ExecutorAction, ExecutorActionType,
         script::{ScriptContext, ScriptRequest, ScriptRequestLanguage},
     },
-    command::{CommandBuilder, apply_overrides},
+    command::apply_overrides,
     executors::{ExecutorError, codex::Codex},
 };
 use local_deployment::Deployment;
@@ -52,7 +52,7 @@ pub async fn run_codex_setup(
 }
 
 async fn get_setup_helper_action(codex: &Codex) -> Result<ExecutorAction, ApiError> {
-    let mut login_command = CommandBuilder::new(Codex::base_command());
+    let mut login_command = Codex::base_command_builder();
     login_command = login_command.extend_params(["login"]);
     login_command = apply_overrides(login_command, &codex.cmd);
 
