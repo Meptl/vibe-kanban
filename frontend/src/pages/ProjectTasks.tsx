@@ -175,7 +175,6 @@ export function ProjectTasks() {
     tasksById,
     isLoading,
     isConnected,
-    error: streamError,
   } = useProjectTasks(projectId || '');
   const { ingestProjectTasks, clearTaskNotifications } = useTaskNotifications();
 
@@ -1076,16 +1075,6 @@ export function ProjectTasks() {
 
   return (
     <div className="min-h-full h-full flex flex-col">
-      {streamError && (
-        <Alert className="w-full z-30 xl:sticky xl:top-0">
-          <AlertTitle className="flex items-center gap-2">
-            <AlertTriangle size="16" />
-            {t('common:states.reconnecting')}
-          </AlertTitle>
-          <AlertDescription>{streamError}</AlertDescription>
-        </Alert>
-      )}
-
       <div className="flex-1 min-h-0">{attemptArea}</div>
     </div>
   );
