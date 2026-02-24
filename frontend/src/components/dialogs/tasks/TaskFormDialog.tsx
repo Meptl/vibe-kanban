@@ -280,6 +280,21 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
     [editMode, props, upload, uploadForTask, form]
   );
 
+  const handleDescriptionPaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(e.clipboardData.items)
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+
+      if (files.length === 0) return;
+
+      e.preventDefault();
+      void onDrop(files);
+    },
+    [onDrop]
+  );
+
   const {
     getRootProps,
     getInputProps,
@@ -459,6 +474,7 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
                       className="w-full min-h-[220px] bg-transparent resize-none outline-none font-mono text-md leading-relaxed"
                       value={field.state.value}
                       onChange={(e) => field.handleChange(e.target.value)}
+                      onPaste={handleDescriptionPaste}
                       disabled={isSubmitting}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
