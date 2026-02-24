@@ -19,6 +19,7 @@ pub mod projects;
 pub mod scratch;
 pub mod tags;
 pub mod task_attempts;
+pub mod task_notifications;
 pub mod tasks;
 
 pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
@@ -30,6 +31,7 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
         .merge(projects::router(&deployment))
         .merge(tasks::router(&deployment))
         .merge(task_attempts::router(&deployment))
+        .merge(task_notifications::router())
         .merge(execution_processes::router(&deployment))
         .merge(tags::router(&deployment))
         .merge(filesystem::router())

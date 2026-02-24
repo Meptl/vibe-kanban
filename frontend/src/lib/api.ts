@@ -90,6 +90,24 @@ export type Err<E> = { success: false; error: E | undefined; message?: string };
 // Result type for endpoints that need typed errors
 export type Result<T, E> = Ok<T> | Err<E>;
 
+export type TaskNotificationOutcome = 'merged' | 'failed' | 'completed';
+
+export interface TaskNotificationRecord {
+  id: string;
+  project_id: string;
+  task_id: string;
+  task_title: string;
+  outcome: TaskNotificationOutcome;
+  created_at: string;
+}
+
+export interface CreateTaskNotificationRequest {
+  project_id: string;
+  task_id: string;
+  task_title: string;
+  outcome: TaskNotificationOutcome;
+}
+
 // Special handler for Result-returning endpoints
 const handleApiResponseAsResult = async <T, E>(
   response: Response
@@ -771,6 +789,52 @@ export const approvalsApi = {
     });
 
     return handleApiResponse<ApprovalStatus>(res);
+  },
+};
+
+// Task Notifications API
+export const taskNotificationsApi = {
+  list: async (): Promise<TaskNotificationRecord[]> => {
+    const response = await makeRequest('/api/task-notifications');
+    return handleApiResponse<TaskNotificationRecord[]>(response);
+  },
+
+  create: async (
+    payload: CreateTaskNotificationRequest
+  ): Promise<TaskNotificationRecord> => {
+    const response = await makeRequest('/api/task-notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return handleApiResponse<TaskNotificationRecord>(response);
+  },
+
+  clearTask: async (projectId: string, taskId: string): Promise<void> => {
+    const query = new URLSearchParams({
+      project_id: projectId,
+      task_id: taskId,
+    });
+    const response = await makeRequest(`/api/task-notifications?${query.toString()}`, {
+      method: 'DELETE',
+    });
+    return handleApiResponse<void>(response);
+  },
+
+  clearProject: async (projectId: string): Promise<void> => {
+    const query = new URLSearchParams({
+      project_id: projectId,
+    });
+    const response = await makeRequest(`/api/task-notifications?${query.toString()}`, {
+      method: 'DELETE',
+    });
+    return handleApiResponse<void>(response);
+  },
+
+  clearAll: async (): Promise<void> => {
+    const response = await makeRequest('/api/task-notifications', {
+      method: 'DELETE',
+    });
+    return handleApiResponse<void>(response);
   },
 };
 

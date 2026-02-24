@@ -234,7 +234,10 @@ pub async fn delete_task(
     Ok((StatusCode::ACCEPTED, ResponseJson(ApiResponse::success(()))))
 }
 
-pub async fn delete_task_with_cleanup(task: Task, deployment: DeploymentImpl) -> Result<(), ApiError> {
+pub async fn delete_task_with_cleanup(
+    task: Task,
+    deployment: DeploymentImpl,
+) -> Result<(), ApiError> {
     // Validate no running execution processes
     if deployment
         .container()

@@ -3,10 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Error as AnyhowError;
 use async_trait::async_trait;
 use axum::response::sse::Event;
-use db::{
-    DBService,
-    models::task_attempt::TaskAttemptError,
-};
+use db::{DBService, models::task_attempt::TaskAttemptError};
 use executors::{executors::ExecutorError, profile::ExecutorConfigs};
 use futures::{StreamExt, TryStreamExt};
 use git2::Error as Git2Error;

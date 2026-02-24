@@ -171,7 +171,8 @@ pub trait ContainerService {
             }
         }
         let message = title.clone();
-        let url = NotificationService::attempt_url(ctx.task.project_id, ctx.task.id, ctx.task_attempt.id);
+        let url =
+            NotificationService::attempt_url(ctx.task.project_id, ctx.task.id, ctx.task_attempt.id);
         self.notification_service()
             .notify_with_url(&title, &message, Some(&url))
             .await;

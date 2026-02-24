@@ -56,7 +56,11 @@ impl NotificationService {
         format!("http://{host}:{port}")
     }
 
-    pub fn attempt_url(project_id: uuid::Uuid, task_id: uuid::Uuid, attempt_id: uuid::Uuid) -> String {
+    pub fn attempt_url(
+        project_id: uuid::Uuid,
+        task_id: uuid::Uuid,
+        attempt_id: uuid::Uuid,
+    ) -> String {
         format!(
             "{}/projects/{}/tasks/{}/attempts/{}",
             Self::frontend_base_url(),

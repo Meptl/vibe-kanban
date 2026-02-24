@@ -10,7 +10,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useProject } from '@/contexts/ProjectContext';
 import { useTaskNotifications } from '@/contexts/TaskNotificationsContext';
 import { paths } from '@/lib/paths';
 
@@ -42,18 +41,10 @@ function outcomeLabel(outcome: 'merged' | 'failed' | 'completed') {
 
 export function TaskNotificationsBell() {
   const navigate = useNavigate();
-  const { projectId } = useProject();
-  const { notifications, clearTaskNotifications } = useTaskNotifications();
+  const { notifications, clearTaskNotifications, clearAllNotifications } =
+    useTaskNotifications();
 
-  const projectNotifications = useMemo(
-    () =>
-      projectId
-        ? notifications.filter((notification) => notification.projectId === projectId)
-        : [],
-    [notifications, projectId]
-  );
-
-  if (!projectId) return null;
+  const visibleNotifications = useMemo(() => notifications, [notifications]);
 
   return (
     <DropdownMenu>
@@ -65,7 +56,7 @@ export function TaskNotificationsBell() {
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
-          {projectNotifications.length > 0 ? (
+          {visibleNotifications.length > 0 ? (
             <span
               aria-hidden="true"
               className="absolute right-0.5 top-0.5 h-2 w-2 -translate-x-[6px] translate-y-[6px] rounded-full bg-rose-400"
@@ -75,13 +66,30 @@ export function TaskNotificationsBell() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-80">
-        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <DropdownMenuLabel className="px-0 py-0">Notifications</DropdownMenuLabel>
+          {visibleNotifications.length > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearAllNotifications();
+              }}
+            >
+              Clear All
+            </Button>
+          ) : null}
+        </div>
         <DropdownMenuSeparator />
 
-        {projectNotifications.length === 0 ? (
+        {visibleNotifications.length === 0 ? (
           <DropdownMenuItem disabled>No recent notifications</DropdownMenuItem>
         ) : (
-          projectNotifications.map((notification) => (
+          visibleNotifications.map((notification) => (
             <DropdownMenuItem
               key={notification.id}
               className="flex cursor-pointer items-start gap-2 py-2"

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use db::{self, DBService};
-use db::models::execution_process::ExecutionProcess;
+use db::{self, DBService, models::execution_process::ExecutionProcess};
 use executors::approvals::{ExecutorApprovalError, ExecutorApprovalService};
 use serde_json::Value;
 use utils::approvals::{ApprovalRequest, ApprovalStatus, CreateApprovalRequest};
@@ -59,21 +58,22 @@ impl ExecutorApprovalService for ExecutorApprovalBridge {
             .map_err(ExecutorApprovalError::request_failed)?;
 
         // Play notification sound when approval is needed
-        let source_url = match ExecutionProcess::load_context(&self.db.pool, self.execution_process_id).await {
-            Ok(ctx) => Some(NotificationService::attempt_url(
-                ctx.task.project_id,
-                ctx.task.id,
-                ctx.task_attempt.id,
-            )),
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to build approval notification URL for execution_process {}: {}",
-                    self.execution_process_id,
-                    e
-                );
-                None
-            }
-        };
+        let source_url =
+            match ExecutionProcess::load_context(&self.db.pool, self.execution_process_id).await {
+                Ok(ctx) => Some(NotificationService::attempt_url(
+                    ctx.task.project_id,
+                    ctx.task.id,
+                    ctx.task_attempt.id,
+                )),
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to build approval notification URL for execution_process {}: {}",
+                        self.execution_process_id,
+                        e
+                    );
+                    None
+                }
+            };
 
         self.notification_service
             .notify_with_url(

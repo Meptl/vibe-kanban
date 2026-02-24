@@ -10,15 +10,18 @@ import {
 } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { TaskWithAttemptStatus } from 'shared/types';
-
-type AttemptCompletionOutcome = 'merged' | 'failed' | 'completed';
+import {
+  taskNotificationsApi,
+  type TaskNotificationOutcome,
+  type TaskNotificationRecord,
+} from '@/lib/api';
 
 export interface TaskNotification {
   id: string;
   projectId: string;
   taskId: string;
   taskTitle: string;
-  outcome: AttemptCompletionOutcome;
+  outcome: TaskNotificationOutcome;
   createdAt: number;
 }
 
@@ -31,6 +34,8 @@ interface TaskNotificationsContextValue {
   notifications: TaskNotification[];
   ingestProjectTasks: (projectId: string, tasks: TaskWithAttemptStatus[]) => void;
   clearTaskNotifications: (projectId: string, taskId: string) => void;
+  clearProjectNotifications: (projectId: string) => void;
+  clearAllNotifications: () => void;
 }
 
 const TaskNotificationsContext =
@@ -46,13 +51,22 @@ function toTaskSnapshot(task: TaskWithAttemptStatus): TaskSnapshot {
   };
 }
 
-function getOutcome(task: TaskSnapshot): AttemptCompletionOutcome {
+function getOutcome(task: TaskSnapshot): TaskNotificationOutcome {
   if (task.has_merged_attempt) return 'merged';
   if (task.last_attempt_failed) return 'failed';
   return 'completed';
 }
 
-const MAX_NOTIFICATIONS = 20;
+function fromServerNotification(record: TaskNotificationRecord): TaskNotification {
+  return {
+    id: record.id,
+    projectId: record.project_id,
+    taskId: record.task_id,
+    taskTitle: record.task_title,
+    outcome: record.outcome,
+    createdAt: Date.parse(record.created_at),
+  };
+}
 
 export function TaskNotificationsProvider({
   children,
@@ -70,10 +84,50 @@ export function TaskNotificationsProvider({
     return { projectId: match[1], taskId: match[2] };
   }, [location.pathname]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const records = await taskNotificationsApi.list();
+        if (cancelled) return;
+        setNotifications(records.map(fromServerNotification));
+      } catch (error) {
+        console.error('Failed to load task notifications', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const clearTaskNotifications = useCallback((projectId: string, taskId: string) => {
     setNotifications((prev) =>
       prev.filter((n) => !(n.projectId === projectId && n.taskId === taskId))
     );
+
+    void taskNotificationsApi.clearTask(projectId, taskId).catch((error) => {
+      console.error('Failed to clear task notifications', error);
+    });
+  }, []);
+
+  const clearProjectNotifications = useCallback((projectId: string) => {
+    setNotifications((prev) =>
+      prev.filter((n) => n.projectId !== projectId)
+    );
+
+    void taskNotificationsApi.clearProject(projectId).catch((error) => {
+      console.error('Failed to clear project notifications', error);
+    });
+  }, []);
+
+  const clearAllNotifications = useCallback(() => {
+    setNotifications([]);
+
+    void taskNotificationsApi.clearAll().catch((error) => {
+      console.error('Failed to clear all notifications', error);
+    });
   }, []);
 
   const ingestProjectTasks = useCallback(
@@ -134,8 +188,21 @@ export function TaskNotificationsProvider({
                 existing.createdAt >= added.createdAt - 500
             )
         );
-        return [...nextNotifications, ...deduped].slice(0, MAX_NOTIFICATIONS);
+        return [...nextNotifications, ...deduped];
       });
+
+      for (const notification of nextNotifications) {
+        void taskNotificationsApi
+          .create({
+            project_id: notification.projectId,
+            task_id: notification.taskId,
+            task_title: notification.taskTitle,
+            outcome: notification.outcome,
+          })
+          .catch((error) => {
+            console.error('Failed to persist task notification', error);
+          });
+      }
     },
     [currentTaskRoute]
   );
@@ -150,8 +217,16 @@ export function TaskNotificationsProvider({
       notifications,
       ingestProjectTasks,
       clearTaskNotifications,
+      clearProjectNotifications,
+      clearAllNotifications,
     }),
-    [notifications, ingestProjectTasks, clearTaskNotifications]
+    [
+      notifications,
+      ingestProjectTasks,
+      clearTaskNotifications,
+      clearProjectNotifications,
+      clearAllNotifications,
+    ]
   );
 
   return (
