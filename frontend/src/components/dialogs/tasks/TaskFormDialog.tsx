@@ -1,7 +1,9 @@
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { defineModal } from '@/lib/modals';
+import { paths } from '@/lib/paths';
 import { useDropzone } from 'react-dropzone';
 import { useForm, useStore } from '@tanstack/react-form';
 import { Image as ImageIcon } from 'lucide-react';
@@ -85,6 +87,8 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
   const { mode, projectId } = props;
   const editMode = mode === 'edit';
   const modal = useModal();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation(['tasks', 'common']);
   const { createTask, createAndStart, updateTask } =
     useTaskMutations(projectId);
@@ -181,6 +185,12 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
           profile: value.executorProfileId!,
           baseBranch: value.branch,
         });
+
+        // When editing from a task/attempt route, the current panel can point at
+        // an outdated attempt after creating a new one. Return to the board.
+        if (location.pathname.startsWith(paths.task(projectId, props.task.id))) {
+          navigate(paths.projectTasks(projectId), { replace: true });
+        }
       }
 
       modal.remove();
