@@ -36,6 +36,7 @@ import {
   useImageUpload,
   useTaskMutations,
 } from '@/hooks';
+import { useAttemptCreation } from '@/hooks/useAttemptCreation';
 import {
   useKeySubmitTask,
   useKeySubmitTaskAlt,
@@ -87,6 +88,9 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
   const { t } = useTranslation(['tasks', 'common']);
   const { createTask, createAndStart, updateTask } =
     useTaskMutations(projectId);
+  const { createAttempt } = useAttemptCreation({
+    taskId: editMode ? props.task.id : '',
+  });
   const { system, profiles, loading: userSystemLoading } = useUserSystem();
   const { upload, uploadForTask } = useImageUpload();
   const { enableScope, disableScope } = useHotkeysContext();
@@ -161,19 +165,25 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
   // Form submission handler
   const handleSubmit = async ({ value }: { value: TaskFormValues }) => {
     if (editMode) {
-      await updateTask.mutateAsync(
-        {
-          taskId: props.task.id,
-          data: {
-            title: value.title,
-            description: value.description,
-            status: value.status,
-            parent_task_attempt: null,
-            image_ids: images.length > 0 ? images.map((img) => img.id) : null,
-          },
+      await updateTask.mutateAsync({
+        taskId: props.task.id,
+        data: {
+          title: value.title,
+          description: value.description,
+          status: value.status,
+          parent_task_attempt: null,
+          image_ids: images.length > 0 ? images.map((img) => img.id) : null,
         },
-        { onSuccess: () => modal.remove() }
-      );
+      });
+
+      if (value.autoStart && !forceCreateOnlyRef.current) {
+        await createAttempt({
+          profile: value.executorProfileId!,
+          baseBranch: value.branch,
+        });
+      }
+
+      modal.remove();
     } else {
       const imageIds =
         newlyUploadedImageIds.length > 0 ? newlyUploadedImageIds : null;
@@ -537,51 +547,47 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
             )}
           </div>
 
-          {/* Create mode dropdowns */}
-          {!editMode && (
-            <form.Field name="autoStart" mode="array">
-              {(autoStartField) => (
-                <div
-                  className={cn(
-                    'flex items-center gap-2 h-9 py-2 my-2 transition-opacity duration-200',
-                    autoStartField.state.value
-                      ? 'opacity-100'
-                      : 'opacity-0 pointer-events-none'
+          {/* Start dropdowns */}
+          <form.Field name="autoStart" mode="array">
+            {(autoStartField) => (
+              <div
+                className={cn(
+                  'flex items-center gap-2 h-9 py-2 my-2 transition-opacity duration-200',
+                  autoStartField.state.value
+                    ? 'opacity-100'
+                    : 'opacity-0 pointer-events-none'
+                )}
+              >
+                <form.Field name="executorProfileId">
+                  {(field) => (
+                    <ExecutorProfileSelector
+                      profiles={profiles}
+                      selectedProfile={field.state.value}
+                      onProfileSelect={(profile) => field.handleChange(profile)}
+                      disabled={isSubmitting || !autoStartField.state.value}
+                      showLabel={false}
+                      className="flex items-center gap-2 flex-row flex-[2] min-w-0"
+                      itemClassName="flex-1 min-w-0"
+                    />
                   )}
-                >
-                  <form.Field name="executorProfileId">
-                    {(field) => (
-                      <ExecutorProfileSelector
-                        profiles={profiles}
-                        selectedProfile={field.state.value}
-                        onProfileSelect={(profile) =>
-                          field.handleChange(profile)
-                        }
-                        disabled={isSubmitting || !autoStartField.state.value}
-                        showLabel={false}
-                        className="flex items-center gap-2 flex-row flex-[2] min-w-0"
-                        itemClassName="flex-1 min-w-0"
-                      />
-                    )}
-                  </form.Field>
-                  <form.Field name="branch">
-                    {(field) => (
-                      <BranchSelector
-                        branches={branches ?? []}
-                        selectedBranch={field.state.value}
-                        onBranchSelect={(branch) => field.handleChange(branch)}
-                        placeholder="Branch"
-                        className={cn(
-                          'h-9 flex-1 min-w-0 text-xs',
-                          isSubmitting && 'opacity-50 cursor-not-allowed'
-                        )}
-                      />
-                    )}
-                  </form.Field>
-                </div>
-              )}
-            </form.Field>
-          )}
+                </form.Field>
+                <form.Field name="branch">
+                  {(field) => (
+                    <BranchSelector
+                      branches={branches ?? []}
+                      selectedBranch={field.state.value}
+                      onBranchSelect={(branch) => field.handleChange(branch)}
+                      placeholder="Branch"
+                      className={cn(
+                        'h-9 flex-1 min-w-0 text-xs',
+                        isSubmitting && 'opacity-50 cursor-not-allowed'
+                      )}
+                    />
+                  )}
+                </form.Field>
+              </div>
+            )}
+          </form.Field>
 
           {/* Actions */}
           <div className="flex items-center justify-between gap-3">
@@ -600,30 +606,26 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
 
             {/* Autostart switch */}
             <div className="flex items-center gap-3">
-              {!editMode && (
-                <form.Field name="autoStart">
-                  {(field) => (
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="autostart-switch"
-                        checked={field.state.value}
-                        onCheckedChange={(checked) =>
-                          field.handleChange(checked)
-                        }
-                        disabled={isSubmitting}
-                        className="data-[state=checked]:bg-gray-900 dark:data-[state=checked]:bg-gray-100"
-                        aria-label={t('taskFormDialog.startLabel')}
-                      />
-                      <Label
-                        htmlFor="autostart-switch"
-                        className="text-sm cursor-pointer"
-                      >
-                        {t('taskFormDialog.startLabel')}
-                      </Label>
-                    </div>
-                  )}
-                </form.Field>
-              )}
+              <form.Field name="autoStart">
+                {(field) => (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="autostart-switch"
+                      checked={field.state.value}
+                      onCheckedChange={(checked) => field.handleChange(checked)}
+                      disabled={isSubmitting}
+                      className="data-[state=checked]:bg-gray-900 dark:data-[state=checked]:bg-gray-100"
+                      aria-label={t('taskFormDialog.startLabel')}
+                    />
+                    <Label
+                      htmlFor="autostart-switch"
+                      className="text-sm cursor-pointer"
+                    >
+                      {t('taskFormDialog.startLabel')}
+                    </Label>
+                  </div>
+                )}
+              </form.Field>
 
               {/* Create/Start/Update button*/}
               <form.Subscribe
@@ -636,7 +638,9 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
                 {({ canSubmit, isSubmitting, values }) => {
                   const buttonText = editMode
                     ? isSubmitting
-                      ? t('taskFormDialog.updating')
+                      ? values.autoStart
+                        ? t('taskFormDialog.starting')
+                        : t('taskFormDialog.updating')
                       : t('taskFormDialog.updateTask')
                     : isSubmitting
                       ? values.autoStart
