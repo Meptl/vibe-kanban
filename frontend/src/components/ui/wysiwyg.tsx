@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, memo } from 'react';
+import { useMemo, useCallback, memo } from 'react';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
@@ -32,8 +32,7 @@ import { LinkNode } from '@lexical/link';
 import { EditorState } from 'lexical';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Check, Clipboard, Pencil, Trash2 } from 'lucide-react';
-import { writeClipboardViaBridge } from '@/vscode/bridge';
+import { Pencil, Trash2 } from 'lucide-react';
 
 /** Markdown string representing the editor content */
 export type SerializedEditorState = string;
@@ -82,19 +81,6 @@ function WYSIWYGEditor({
   onDelete,
   autoFocus = false,
 }: WysiwygProps) {
-  // Copy button state
-  const [copied, setCopied] = useState(false);
-  const handleCopy = useCallback(async () => {
-    if (!value) return;
-    try {
-      await writeClipboardViaBridge(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 400);
-    } catch {
-      // noop – bridge handles fallback
-    }
-  }, [value]);
-
   const initialConfig = useMemo(
     () => ({
       namespace: 'md-wysiwyg',
@@ -247,22 +233,6 @@ function WYSIWYGEditor({
       <div className="relative group">
         <div className="sticky top-0 right-2 z-10 pointer-events-none h-0">
           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            {/* Copy button */}
-            <Button
-              type="button"
-              aria-label={copied ? 'Copied!' : 'Copy as Markdown'}
-              title={copied ? 'Copied!' : 'Copy as Markdown'}
-              variant="icon"
-              size="icon"
-              onClick={handleCopy}
-              className="pointer-events-auto p-2 bg-muted h-8 w-8"
-            >
-              {copied ? (
-                <Check className="w-4 h-4 text-success" />
-              ) : (
-                <Clipboard className="w-4 h-4 text-muted-foreground" />
-              )}
-            </Button>
             {/* Edit button - only if onEdit provided */}
             {onEdit && (
               <Button
