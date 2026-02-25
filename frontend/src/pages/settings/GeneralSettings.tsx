@@ -545,23 +545,67 @@ export function GeneralSettings() {
           )}
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="push-notifications"
-              checked={draft?.notifications.push_enabled}
+              id="badge-notifications"
+              checked={draft?.notifications.badge_enabled}
               onCheckedChange={(checked: boolean) =>
                 updateDraft({
                   notifications: {
                     ...draft!.notifications,
-                    push_enabled: checked,
+                    badge_enabled: checked,
                   },
                 })
               }
             />
             <div className="space-y-0.5">
-              <Label htmlFor="push-notifications" className="cursor-pointer">
-                {t('settings.general.notifications.push.label')}
+              <Label htmlFor="badge-notifications" className="cursor-pointer">
+                {t('settings.general.notifications.badge.label')}
               </Label>
               <p className="text-sm text-muted-foreground">
-                {t('settings.general.notifications.push.helper')}
+                {t('settings.general.notifications.badge.helper')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="toast-notifications"
+              checked={draft?.notifications.toast_enabled}
+              onCheckedChange={(checked: boolean) =>
+                updateDraft({
+                  notifications: {
+                    ...draft!.notifications,
+                    toast_enabled: checked,
+                  },
+                })
+              }
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="toast-notifications" className="cursor-pointer">
+                {t('settings.general.notifications.toast.label')}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t('settings.general.notifications.toast.helper')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="system-notifications"
+              checked={draft?.notifications.system_enabled}
+              onCheckedChange={(checked: boolean) =>
+                updateDraft({
+                  notifications: {
+                    ...draft!.notifications,
+                    system_enabled: checked,
+                  },
+                })
+              }
+            />
+            <div className="space-y-0.5">
+              <Label htmlFor="system-notifications" className="cursor-pointer">
+                {t('settings.general.notifications.system.label')}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t('settings.general.notifications.system.helper')}
               </p>
             </div>
           </div>

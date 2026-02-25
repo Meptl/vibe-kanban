@@ -155,9 +155,17 @@
           "filePlaceholder": "Seleccionar sonido",
           "fileHelper": "Elige el sonido que se reproducirá al completar las tareas. Haz clic en el botón de volumen para escucharlo."
         },
-        "push": {
-          "label": "Notificaciones Push",
-          "helper": "Muestra notificaciones del sistema cuando las tareas terminan de ejecutarse."
+        "badge": {
+          "label": "Notificaciones de Insignia",
+          "helper": "Muestra el punto rojo en el icono de campana cuando hay notificaciones de tareas sin leer."
+        },
+        "toast": {
+          "label": "Notificaciones Toast",
+          "helper": "Muestra notificaciones dentro de la app cuando una tarea termina y la app está en foco."
+        },
+        "system": {
+          "label": "Notificaciones del Sistema",
+          "helper": "Muestra notificaciones del sistema cuando una tarea termina y la app no está en foco."
         }
       },
       "privacy": {

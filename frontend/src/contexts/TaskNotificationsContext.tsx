@@ -277,13 +277,16 @@ export function TaskNotificationsProvider({
         return [...nextNotifications, ...deduped];
       });
 
-      if (config?.notifications.push_enabled) {
-        for (const notification of nextNotifications) {
-          if (isAppFocused()) {
+      for (const notification of nextNotifications) {
+        if (isAppFocused()) {
+          if (config?.notifications.toast_enabled) {
             showInAppToast(notification);
-          } else {
-            void showBrowserNotification(notification);
           }
+          continue;
+        }
+
+        if (config?.notifications.system_enabled) {
+          void showBrowserNotification(notification);
         }
       }
 
@@ -301,7 +304,8 @@ export function TaskNotificationsProvider({
       }
     },
     [
-      config?.notifications.push_enabled,
+      config?.notifications.system_enabled,
+      config?.notifications.toast_enabled,
       currentTaskRoute,
       showBrowserNotification,
       showInAppToast,

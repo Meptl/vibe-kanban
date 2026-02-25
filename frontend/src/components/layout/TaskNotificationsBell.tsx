@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useUserSystem } from '@/components/ConfigProvider';
 import { useTaskNotifications } from '@/contexts/TaskNotificationsContext';
 import { paths } from '@/lib/paths';
 
@@ -40,6 +41,7 @@ function outcomeLabel(outcome: 'merged' | 'failed' | 'completed') {
 
 export function TaskNotificationsBell() {
   const navigate = useNavigate();
+  const { config } = useUserSystem();
   const { notifications, clearTaskNotifications, clearAllNotifications } =
     useTaskNotifications();
 
@@ -55,7 +57,7 @@ export function TaskNotificationsBell() {
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
-          {visibleNotifications.length > 0 ? (
+          {config?.notifications.badge_enabled && visibleNotifications.length > 0 ? (
             <span
               aria-hidden="true"
               className="absolute right-0.5 top-0.5 h-2 w-2 -translate-x-[6px] translate-y-[6px] rounded-full bg-rose-400"

@@ -41,7 +41,7 @@ impl NotificationService {
             Self::play_sound_notification(&config.sound_file).await;
         }
 
-        if config.push_enabled {
+        if config.system_enabled {
             Self::send_push_notification(title, message, url).await;
         }
     }

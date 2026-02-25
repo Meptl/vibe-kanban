@@ -2,11 +2,41 @@ use anyhow::Error;
 use executors::{executors::BaseCodingAgent, profile::ExecutorProfileId};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-pub use v7::{
-    EditorConfig, EditorType, NotificationConfig, ShowcaseState, SoundFile, ThemeMode, UiLanguage,
-};
+pub use v8::{EditorConfig, EditorType, ShowcaseState, SoundFile, ThemeMode, UiLanguage};
 
-use crate::services::config::versions::v7;
+use crate::services::config::versions::v8;
+
+fn default_badge_enabled() -> bool {
+    true
+}
+
+fn default_toast_enabled() -> bool {
+    true
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+pub struct NotificationConfig {
+    pub sound_enabled: bool,
+    #[serde(alias = "push_enabled")]
+    pub system_enabled: bool,
+    #[serde(default = "default_badge_enabled")]
+    pub badge_enabled: bool,
+    #[serde(default = "default_toast_enabled")]
+    pub toast_enabled: bool,
+    pub sound_file: SoundFile,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            sound_enabled: true,
+            system_enabled: true,
+            badge_enabled: default_badge_enabled(),
+            toast_enabled: default_toast_enabled(),
+            sound_file: SoundFile::AbstractSound4,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct Config {
@@ -29,14 +59,20 @@ pub struct Config {
 }
 
 impl Config {
-    fn from_v7_config(old_config: v7::Config) -> Self {
+    fn from_v8_config(old_config: v8::Config) -> Self {
         Self {
-            config_version: "v8".to_string(),
+            config_version: "v9".to_string(),
             theme: old_config.theme,
             executor_profile: old_config.executor_profile,
             disclaimer_acknowledged: old_config.disclaimer_acknowledged,
             onboarding_acknowledged: old_config.onboarding_acknowledged,
-            notifications: old_config.notifications,
+            notifications: NotificationConfig {
+                sound_enabled: old_config.notifications.sound_enabled,
+                system_enabled: old_config.notifications.push_enabled,
+                badge_enabled: default_badge_enabled(),
+                toast_enabled: default_toast_enabled(),
+                sound_file: old_config.notifications.sound_file,
+            },
             editor: old_config.editor,
             workspace_dir: old_config.workspace_dir,
             last_app_version: old_config.last_app_version,
@@ -48,22 +84,22 @@ impl Config {
     }
 
     pub fn from_previous_version(raw_config: &str) -> Result<Self, Error> {
-        let old_config = v7::Config::from(raw_config.to_string());
-        Ok(Self::from_v7_config(old_config))
+        let old_config = v8::Config::from(raw_config.to_string());
+        Ok(Self::from_v8_config(old_config))
     }
 }
 
 impl From<String> for Config {
     fn from(raw_config: String) -> Self {
         if let Ok(config) = serde_json::from_str::<Config>(&raw_config)
-            && config.config_version == "v8"
+            && config.config_version == "v9"
         {
             return config;
         }
 
         match Self::from_previous_version(&raw_config) {
             Ok(config) => {
-                tracing::info!("Config upgraded to v8");
+                tracing::info!("Config upgraded to v9");
                 config
             }
             Err(e) => {
@@ -77,7 +113,7 @@ impl From<String> for Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            config_version: "v8".to_string(),
+            config_version: "v9".to_string(),
             theme: ThemeMode::System,
             executor_profile: ExecutorProfileId::new(BaseCodingAgent::ClaudeCode),
             disclaimer_acknowledged: false,
