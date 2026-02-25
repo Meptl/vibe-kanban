@@ -14,7 +14,7 @@ import { useOpenInEditor } from '@/hooks/useOpenInEditor';
 import { DeleteTaskConfirmationDialog } from '@/components/dialogs/tasks/DeleteTaskConfirmationDialog';
 import { ViewProcessesDialog } from '@/components/dialogs/tasks/ViewProcessesDialog';
 import { CreateAttemptDialog } from '@/components/dialogs/tasks/CreateAttemptDialog';
-import { EditBranchNameDialog } from '@/components/dialogs/tasks/EditBranchNameDialog';
+import { GitActionsDialog } from '@/components/dialogs/tasks/GitActionsDialog';
 import { useProject } from '@/contexts/ProjectContext';
 import { openTaskForm } from '@/lib/openTaskForm';
 
@@ -76,12 +76,12 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
     });
   };
 
-  const handleEditBranchName = (e: React.MouseEvent) => {
+  const handleGitActions = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!attempt?.id) return;
-    EditBranchNameDialog.show({
+    GitActionsDialog.show({
       attemptId: attempt.id,
-      currentBranchName: attempt.branch,
+      projectId,
     });
   };
   return (
@@ -119,9 +119,9 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!attempt?.id}
-                onClick={handleEditBranchName}
+                onClick={handleGitActions}
               >
-                {t('actionsMenu.editBranchName')}
+                {t('actionsMenu.gitActions')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>

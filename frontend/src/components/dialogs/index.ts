@@ -47,10 +47,6 @@ export {
   GitActionsDialog,
   type GitActionsDialogProps,
 } from './tasks/GitActionsDialog';
-export {
-  EditBranchNameDialog,
-  type EditBranchNameDialogResult,
-} from './tasks/EditBranchNameDialog';
 export { CreateAttemptDialog } from './tasks/CreateAttemptDialog';
 
 // Settings dialogs

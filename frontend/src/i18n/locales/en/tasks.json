@@ -288,19 +288,9 @@
     "viewRelatedTasks": "View related tasks",
     "createNewAttempt": "Create new attempt",
     "createSubtask": "Create subtask",
-    "editBranchName": "Edit branch name",
+    "gitActions": "Git actions",
     "task": "Task",
     "duplicate": "Duplicate"
-  },
-  "editBranchName": {
-    "dialog": {
-      "title": "Edit Branch Name",
-      "description": "Enter a new name for the branch. Cannot rename if an open PR exists.",
-      "branchNameLabel": "Branch Name",
-      "placeholder": "e.g., feature/my-branch",
-      "renaming": "Renaming...",
-      "action": "Rename Branch"
-    }
   },
   "createPrDialog": {
     "title": "Create GitHub Pull Request",

@@ -288,19 +288,9 @@
     "viewRelatedTasks": "查看相关任务",
     "createNewAttempt": "创建新尝试",
     "createSubtask": "创建子任务",
-    "editBranchName": "编辑分支名称",
+    "gitActions": "Git 操作",
     "task": "任务",
     "duplicate": "复制"
-  },
-  "editBranchName": {
-    "dialog": {
-      "title": "编辑分支名称",
-      "description": "输入分支的新名称。如果存在未关闭的 PR，则无法重命名。",
-      "branchNameLabel": "分支名称",
-      "placeholder": "例如：feature/my-branch",
-      "renaming": "重命名中...",
-      "action": "重命名分支"
-    }
   },
   "createPrDialog": {
     "title": "创建 GitHub 拉取请求",
