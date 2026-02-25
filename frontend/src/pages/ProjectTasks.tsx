@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { AlertTriangle, Pencil, Plus } from 'lucide-react';
+import { AlertTriangle, Plus } from 'lucide-react';
 import { Loader } from '@/components/ui/loader';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { attemptsApi, projectsApi, tasksApi } from '@/lib/api';
 import type { GitBranch } from 'shared/types';
 import { openTaskForm } from '@/lib/openTaskForm';
@@ -99,6 +107,7 @@ function AttemptHeaderActionsWithGitOps({
   task,
   attempt,
   gitOps,
+  attemptSwitcher,
   onClose,
 }: {
   mode: LayoutMode;
@@ -106,6 +115,7 @@ function AttemptHeaderActionsWithGitOps({
   task: TaskWithAttemptStatus;
   attempt: NonNullable<ReturnType<typeof useTaskAttempt>['data']>;
   gitOps?: Omit<GitOperationsInputs, 'isAttemptRunning'>;
+  attemptSwitcher?: ReactNode;
   onClose: () => void;
 }) {
   const { isAttemptRunning } = useAttemptExecution(attempt?.id);
@@ -117,6 +127,7 @@ function AttemptHeaderActionsWithGitOps({
       task={task}
       attempt={attempt}
       gitOps={gitOps ? { ...gitOps, isAttemptRunning } : undefined}
+      attemptSwitcher={attemptSwitcher}
       onClose={onClose}
     />
   );
@@ -212,22 +223,46 @@ export function ProjectTasks() {
   ]);
 
   const isLatest = attemptId === 'latest';
+  const effectiveAttemptId = attemptId === 'latest' ? undefined : attemptId;
   const { data: attempts = [], isLoading: isAttemptsLoading } = useTaskAttempts(
     taskId,
     {
-      enabled: !!taskId && isLatest,
+      enabled: !!taskId && (isLatest || !!effectiveAttemptId),
     }
   );
 
+  const attemptsNewestFirst = useMemo(
+    () =>
+      [...attempts].sort((a, b) => {
+        const diff =
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      }),
+    [attempts]
+  );
+
   const latestAttemptId = useMemo(() => {
-    if (!attempts?.length) return undefined;
-    return [...attempts].sort((a, b) => {
-      const diff =
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      if (diff !== 0) return diff;
-      return a.id.localeCompare(b.id);
-    })[0].id;
-  }, [attempts]);
+    if (!attemptsNewestFirst.length) return undefined;
+    return attemptsNewestFirst[0].id;
+  }, [attemptsNewestFirst]);
+
+  const attemptNumberById = useMemo(() => {
+    return new Map(
+      [...attemptsNewestFirst]
+        .reverse()
+        .map((taskAttempt, index) => [taskAttempt.id, index + 1])
+    );
+  }, [attemptsNewestFirst]);
+
+  const attemptDropdownItems = useMemo(
+    () =>
+      [...attemptsNewestFirst].reverse().map((taskAttempt) => ({
+        id: taskAttempt.id,
+        label: `Attempt ${attemptNumberById.get(taskAttempt.id) ?? '?'}`,
+      })),
+    [attemptNumberById, attemptsNewestFirst]
+  );
 
   const navigateWithSearch = useCallback(
     (pathname: string, options?: { replace?: boolean }) => {
@@ -277,7 +312,6 @@ export function ProjectTasks() {
     }
   }, [projectId, taskId, isLoading, selectedTask, navigate]);
 
-  const effectiveAttemptId = attemptId === 'latest' ? undefined : attemptId;
   const isTaskView = !!taskId && !effectiveAttemptId;
   const { data: attempt } = useTaskAttempt(effectiveAttemptId);
   const taskRouteResolutionRef = useRef<string | null>(null);
@@ -879,6 +913,39 @@ export function ProjectTasks() {
             task={selectedTask}
             attempt={attempt}
             gitOps={headerGitOps}
+            attemptSwitcher={
+              attemptDropdownItems.length > 1 ? (
+              <Select
+                value={
+                  attemptDropdownItems.some((item) => item.id === attempt.id)
+                    ? attempt.id
+                    : undefined
+                }
+                onValueChange={(nextAttemptId) => {
+                  if (!projectId) return;
+                  navigateWithSearch(
+                    paths.attempt(projectId, selectedTask.id, nextAttemptId)
+                  );
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Select attempt"
+                  className="h-8 w-auto min-w-[7rem] shrink-0 px-2 pr-1.5"
+                >
+                  <SelectValue
+                    placeholder={`Attempt ${attemptNumberById.get(attempt.id) ?? '?'}`}
+                  />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {attemptDropdownItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              ) : null
+            }
             onClose={() =>
               navigate(`/projects/${projectId}/tasks`, { replace: true })
             }
@@ -886,7 +953,7 @@ export function ProjectTasks() {
         }
       >
         <div className="mx-auto w-full">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words hover:underline"
@@ -896,19 +963,6 @@ export function ProjectTasks() {
             >
               {selectedTask.title || 'Task'}
             </button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              aria-label="Edit task"
-              onClick={() => {
-                if (!projectId) return;
-                openTaskForm({ mode: 'edit', projectId, task: selectedTask });
-              }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </NewCardHeader>

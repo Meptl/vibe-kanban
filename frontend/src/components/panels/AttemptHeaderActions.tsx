@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Eye, FileDiff, X } from 'lucide-react';
 import { Button } from '../ui/button';
@@ -23,6 +24,7 @@ interface AttemptHeaderActionsProps {
   task: TaskWithAttemptStatus;
   attempt?: TaskAttempt | null;
   gitOps?: GitOperationsInputs;
+  attemptSwitcher?: ReactNode;
 }
 
 export const AttemptHeaderActions = ({
@@ -32,6 +34,7 @@ export const AttemptHeaderActions = ({
   task,
   attempt,
   gitOps,
+  attemptSwitcher,
 }: AttemptHeaderActionsProps) => {
   const { t } = useTranslation('tasks');
   const isXL = useMediaQuery('(min-width: 1280px)');
@@ -89,11 +92,13 @@ export const AttemptHeaderActions = ({
               display="action-only"
             />
           )}
+          {attemptSwitcher}
         </div>
       )}
       {typeof mode !== 'undefined' && onModeChange && isXL && (
         <div className="h-4 w-px bg-border" />
       )}
+      {!isXL && attemptSwitcher}
       <ActionsDropdown task={task} attempt={attempt} />
       <Button variant="icon" aria-label="Close" onClick={onClose}>
         <X size={16} />
