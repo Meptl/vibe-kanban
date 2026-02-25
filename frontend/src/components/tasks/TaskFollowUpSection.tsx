@@ -168,7 +168,11 @@ export function TaskFollowUpSection({
       // Don't create empty draft entries unless one already exists (to allow clearing).
       if (!message.trim() && !variant && !scratchRef.current) return;
       try {
-        saveDraft({ message, variant });
+        saveDraft({
+          message,
+          variant,
+          review_comments: scratchRef.current?.review_comments ?? [],
+        });
       } catch (e) {
         console.error('Failed to save follow-up draft', e);
       }

@@ -27,6 +27,7 @@ pub async fn queue_message(
     let data = DraftFollowUpData {
         message: payload.message,
         variant: payload.variant,
+        review_comments: Vec::new(),
     };
 
     let queued = deployment

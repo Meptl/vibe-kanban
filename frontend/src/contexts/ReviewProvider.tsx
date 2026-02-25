@@ -7,6 +7,11 @@ import {
   useEffect,
   useCallback,
 } from 'react';
+import type { DraftReviewCommentData } from 'shared/types';
+import {
+  readFollowUpDraftScratch,
+  writeFollowUpDraftScratch,
+} from '@/lib/followUpDraftScratch';
 import { genId } from '@/utils/id';
 
 export interface ReviewComment {
@@ -39,6 +44,14 @@ interface ReviewContextType {
 
 const ReviewContext = createContext<ReviewContextType | null>(null);
 
+function deserializeSplitSide(side: string): SplitSide {
+  return side === 'old' ? SplitSide.old : SplitSide.new;
+}
+
+function serializeSplitSide(side: SplitSide): string {
+  return side === SplitSide.old ? 'old' : 'new';
+}
+
 export function useReview() {
   const context = useContext(ReviewContext);
   if (!context) {
@@ -58,8 +71,51 @@ export function ReviewProvider({
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
 
   useEffect(() => {
-    return () => clearComments();
+    setDrafts({});
   }, [attemptId]);
+
+  useEffect(() => {
+    if (!attemptId) {
+      setComments([]);
+      return;
+    }
+
+    const draft = readFollowUpDraftScratch(attemptId);
+    const nextComments =
+      draft?.review_comments.map((comment) => ({
+        id: genId(),
+        filePath: comment.file_path,
+        lineNumber: comment.line_number,
+        side: deserializeSplitSide(comment.side),
+        text: comment.text,
+        ...(comment.code_line ? { codeLine: comment.code_line } : {}),
+      })) ?? [];
+
+    setComments(nextComments);
+  }, [attemptId]);
+
+  useEffect(() => {
+    if (!attemptId || typeof window === 'undefined') return;
+
+    try {
+      const existing = readFollowUpDraftScratch(attemptId);
+      writeFollowUpDraftScratch(attemptId, {
+        message: existing?.message ?? '',
+        variant: existing?.variant ?? null,
+        review_comments: comments.map(
+          (comment): DraftReviewCommentData => ({
+            file_path: comment.filePath,
+            line_number: comment.lineNumber,
+            side: serializeSplitSide(comment.side),
+            text: comment.text,
+            code_line: comment.codeLine ?? null,
+          })
+        ),
+      });
+    } catch (error) {
+      console.error('Failed to persist review comments to draft scratch', error);
+    }
+  }, [attemptId, comments]);
 
   const addComment = (comment: Omit<ReviewComment, 'id'>) => {
     const newComment: ReviewComment = {

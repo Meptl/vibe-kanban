@@ -32,7 +32,9 @@ export type CreateTask = { project_id: string, title: string, description: strin
 
 export type UpdateTask = { title: string | null, description: string | null, status: TaskStatus | null, parent_task_attempt: string | null, image_ids: Array<string> | null, };
 
-export type DraftFollowUpData = { message: string, variant: string | null, };
+export type DraftReviewCommentData = { file_path: string, line_number: number, side: string, text: string, code_line: string | null, };
+
+export type DraftFollowUpData = { message: string, variant: string | null, review_comments: Array<DraftReviewCommentData>, };
 
 export type ScratchPayload = { "type": "DRAFT_TASK", "data": string } | { "type": "DRAFT_FOLLOW_UP", "data": DraftFollowUpData };
 
