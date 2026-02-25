@@ -37,22 +37,7 @@ const Dialog = React.forwardRef<
   useKeyExit(
     (e) => {
       if (uncloseable) return;
-
-      // Two-step Esc behavior:
-      // 1. If input/textarea is focused, blur it first
-      const activeElement = document.activeElement as HTMLElement;
-      if (
-        activeElement &&
-        (activeElement.tagName === 'INPUT' ||
-          activeElement.tagName === 'TEXTAREA' ||
-          activeElement.isContentEditable)
-      ) {
-        activeElement.blur();
-        e?.preventDefault();
-        return;
-      }
-
-      // 2. Otherwise close the dialog
+      e?.preventDefault();
       onOpenChange?.(false);
     },
     {
