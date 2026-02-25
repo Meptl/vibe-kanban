@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { isEqual } from 'lodash';
+import { cloneDeep, isEqual } from 'lodash';
 import {
   Card,
   CardContent,
@@ -53,6 +53,25 @@ function projectToFormState(project: Project): ProjectFormState {
   };
 }
 
+function normalizeProjectFormState(state: ProjectFormState): ProjectFormState {
+  return {
+    ...state,
+    name: state.name.trim(),
+    git_repo_path: state.git_repo_path.trim(),
+    setup_script: state.setup_script.trim(),
+    dev_script: state.dev_script.trim(),
+    cleanup_script: state.cleanup_script.trim(),
+    copy_files: state.copy_files.trim(),
+  };
+}
+
+function stripManualProjectFields(
+  state: ProjectFormState
+): Omit<ProjectFormState, 'name' | 'git_repo_path'> {
+  const { name: _name, git_repo_path: _gitRepoPath, ...rest } = state;
+  return rest;
+}
+
 export function ProjectSettings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const projectIdParam = searchParams.get('projectId') ?? '';
@@ -76,14 +95,34 @@ export function ProjectSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const latestDraftRef = useRef<ProjectFormState | null>(null);
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  const saveSeqRef = useRef(0);
 
   // Get OS-appropriate script placeholders
   const placeholders = useScriptPlaceholders();
 
-  // Check for unsaved changes
   const hasUnsavedChanges = useMemo(() => {
     if (!draft || !selectedProject) return false;
     return !isEqual(draft, projectToFormState(selectedProject));
+  }, [draft, selectedProject]);
+
+  const hasManualNamePathChanges = useMemo(() => {
+    if (!draft || !selectedProject) return false;
+    const current = projectToFormState(selectedProject);
+    return (
+      draft.name.trim() !== current.name ||
+      draft.git_repo_path.trim() !== current.git_repo_path
+    );
+  }, [draft, selectedProject]);
+
+  const hasImmediateChanges = useMemo(() => {
+    if (!draft || !selectedProject) return false;
+    const current = projectToFormState(selectedProject);
+    return !isEqual(
+      stripManualProjectFields(normalizeProjectFormState(draft)),
+      stripManualProjectFields(current)
+    );
   }, [draft, selectedProject]);
 
   // Handle project selection from dropdown
@@ -91,20 +130,10 @@ export function ProjectSettings() {
     (id: string) => {
       // No-op if same project
       if (id === selectedProjectId) return;
-
-      // Confirm if there are unsaved changes
-      if (hasUnsavedChanges) {
-        const confirmed = window.confirm(
-          t('settings.projects.save.confirmSwitch')
-        );
-        if (!confirmed) return;
-
-        // Clear local state before switching
-        setDraft(null);
-        setSelectedProject(null);
-        setSuccess(false);
-        setError(null);
-      }
+      setDraft(null);
+      setSelectedProject(null);
+      setSuccess(false);
+      setError(null);
 
       // Update state and URL
       setSelectedProjectId(id);
@@ -114,43 +143,18 @@ export function ProjectSettings() {
         setSearchParams({});
       }
     },
-    [hasUnsavedChanges, selectedProjectId, setSearchParams, t]
+    [selectedProjectId, setSearchParams]
   );
 
-  // Sync selectedProjectId when URL changes (with unsaved changes prompt)
+  // Sync selectedProjectId when URL changes
   useEffect(() => {
     if (projectIdParam === selectedProjectId) return;
-
-    // Confirm if there are unsaved changes
-    if (hasUnsavedChanges) {
-      const confirmed = window.confirm(
-        t('settings.projects.save.confirmSwitch')
-      );
-      if (!confirmed) {
-        // Revert URL to previous value
-        if (selectedProjectId) {
-          setSearchParams({ projectId: selectedProjectId });
-        } else {
-          setSearchParams({});
-        }
-        return;
-      }
-
-      // Clear local state before switching
-      setDraft(null);
-      setSelectedProject(null);
-      setSuccess(false);
-      setError(null);
-    }
-
+    setDraft(null);
+    setSelectedProject(null);
+    setSuccess(false);
+    setError(null);
     setSelectedProjectId(projectIdParam);
-  }, [
-    projectIdParam,
-    hasUnsavedChanges,
-    selectedProjectId,
-    setSearchParams,
-    t,
-  ]);
+  }, [projectIdParam, selectedProjectId]);
 
   // Populate draft from server data
   useEffect(() => {
@@ -174,68 +178,15 @@ export function ProjectSettings() {
     setDraft(projectToFormState(nextProject));
   }, [projects, selectedProjectId, hasUnsavedChanges]);
 
-  // Warn on tab close/navigation with unsaved changes
+  const { updateProject } = useProjectMutations();
+
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasUnsavedChanges]);
+    latestDraftRef.current = draft;
+  }, [draft]);
 
-  const { updateProject } = useProjectMutations({
-    onUpdateSuccess: (updatedProject: Project) => {
-      // Update local state with fresh data from server
-      setSelectedProject(updatedProject);
-      setDraft(projectToFormState(updatedProject));
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-      setSaving(false);
-    },
-    onUpdateError: (err) => {
-      setError(
-        err instanceof Error ? err.message : 'Failed to save project settings'
-      );
-      setSaving(false);
-    },
-  });
-
-  const handleSave = async () => {
-    if (!draft || !selectedProject) return;
-
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    try {
-      const updateData: UpdateProject = {
-        name: draft.name.trim(),
-        git_repo_path: draft.git_repo_path.trim(),
-        setup_script: draft.setup_script.trim() || null,
-        parallel_setup_script: draft.parallel_setup_script,
-        dev_script: draft.dev_script.trim() || null,
-        cleanup_script: draft.cleanup_script.trim() || null,
-        copy_files: draft.copy_files.trim() || null,
-      };
-
-      updateProject.mutate({
-        projectId: selectedProject.id,
-        data: updateData,
-      });
-    } catch (err) {
-      setError(t('settings.projects.save.error'));
-      console.error('Error saving project settings:', err);
-      setSaving(false);
-    }
-  };
-
-  const handleDiscard = () => {
-    if (!selectedProject) return;
-    setDraft(projectToFormState(selectedProject));
-  };
+  useEffect(() => {
+    selectedProjectIdRef.current = selectedProjectId;
+  }, [selectedProjectId]);
 
   const updateDraft = (updates: Partial<ProjectFormState>) => {
     setDraft((prev) => {
@@ -243,6 +194,81 @@ export function ProjectSettings() {
       return { ...prev, ...updates };
     });
   };
+
+  const saveProjectSnapshot = useCallback(
+    async (saveSnapshot: ProjectFormState, projectId: string, saveSeq: number) => {
+      setSaving(true);
+      setError(null);
+      setSuccess(false);
+
+      try {
+        const updateData: UpdateProject = {
+          name: saveSnapshot.name.trim(),
+          git_repo_path: saveSnapshot.git_repo_path.trim(),
+          setup_script: saveSnapshot.setup_script.trim() || null,
+          parallel_setup_script: saveSnapshot.parallel_setup_script,
+          dev_script: saveSnapshot.dev_script.trim() || null,
+          cleanup_script: saveSnapshot.cleanup_script.trim() || null,
+          copy_files: saveSnapshot.copy_files.trim() || null,
+        };
+
+        const updatedProject = await updateProject.mutateAsync({
+          projectId,
+          data: updateData,
+        });
+
+        const normalizedSnapshot = normalizeProjectFormState(saveSnapshot);
+
+        if (selectedProjectIdRef.current === updatedProject.id) {
+          setSelectedProject(updatedProject);
+          if (isEqual(latestDraftRef.current, saveSnapshot)) {
+            setDraft(projectToFormState(updatedProject));
+          } else if (isEqual(latestDraftRef.current, normalizedSnapshot)) {
+            setDraft(projectToFormState(updatedProject));
+          }
+        }
+
+        if (saveSeq === saveSeqRef.current) {
+          setSuccess(true);
+          setTimeout(() => setSuccess(false), 3000);
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : t('settings.projects.save.error')
+        );
+        console.error('Error saving project settings:', err);
+      } finally {
+        if (saveSeq === saveSeqRef.current) {
+          setSaving(false);
+        }
+      }
+    },
+    [t, updateProject]
+  );
+
+  const handleSaveNamePath = async () => {
+    if (!draft || !selectedProject) return;
+    if (!draft.name.trim() || !draft.git_repo_path.trim()) return;
+    const saveSnapshot = cloneDeep(draft);
+    const saveSeq = ++saveSeqRef.current;
+    await saveProjectSnapshot(saveSnapshot, selectedProject.id, saveSeq);
+  };
+
+  useEffect(() => {
+    if (!draft || !selectedProject) return;
+    if (!hasImmediateChanges) return;
+    if (!draft.name.trim() || !draft.git_repo_path.trim()) return;
+
+    const saveSnapshot = cloneDeep(draft);
+    const projectId = selectedProject.id;
+    const saveSeq = ++saveSeqRef.current;
+
+    const timer = window.setTimeout(async () => {
+      await saveProjectSnapshot(saveSnapshot, projectId, saveSeq);
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [draft, hasImmediateChanges, saveProjectSnapshot, selectedProject]);
 
   if (projectsLoading) {
     return (
@@ -272,14 +298,6 @@ export function ProjectSettings() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert variant="success">
-          <AlertDescription className="font-medium">
-            {t('settings.projects.save.success')}
-          </AlertDescription>
         </Alert>
       )}
 
@@ -329,10 +347,28 @@ export function ProjectSettings() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>{t('settings.projects.general.title')}</CardTitle>
-              <CardDescription>
-                {t('settings.projects.general.description')}
-              </CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{t('settings.projects.general.title')}</CardTitle>
+                  <CardDescription>
+                    {t('settings.projects.general.description')}
+                  </CardDescription>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveNamePath}
+                  disabled={
+                    saving ||
+                    !hasManualNamePathChanges ||
+                    !draft.name.trim() ||
+                    !draft.git_repo_path.trim()
+                  }
+                >
+                  {t('settings.projects.save.button')}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -503,34 +539,12 @@ export function ProjectSettings() {
             </CardContent>
           </Card>
 
-          {/* Sticky Save Button */}
-          <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t py-4">
-            <div className="flex items-center justify-between">
-              {hasUnsavedChanges ? (
-                <span className="text-sm text-muted-foreground">
-                  {t('settings.projects.save.unsavedChanges')}
-                </span>
-              ) : (
-                <span />
-              )}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleDiscard}
-                  disabled={!hasUnsavedChanges || saving}
-                >
-                  {t('settings.projects.save.discard')}
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={!hasUnsavedChanges || saving}
-                >
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t('settings.projects.save.button')}
-                </Button>
-              </div>
+          {saving && !success && (
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              {t('settings.projects.save.button')}
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

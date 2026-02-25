@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cloneDeep, merge, isEqual } from 'lodash';
 import {
@@ -61,6 +61,8 @@ export function GeneralSettings() {
   const [branchPrefixError, setBranchPrefixError] = useState<string | null>(
     null
   );
+  const latestDraftRef = useRef(draft);
+  const saveSeqRef = useRef(0);
   const { setTheme } = useTheme();
 
   // Check editor availability when draft editor changes
@@ -98,11 +100,9 @@ export function GeneralSettings() {
     }
   }, [config, dirty]);
 
-  // Check for unsaved changes
-  const hasUnsavedChanges = useMemo(() => {
-    if (!draft || !config) return false;
-    return !isEqual(draft, config);
-  }, [draft, config]);
+  useEffect(() => {
+    latestDraftRef.current = draft;
+  }, [draft]);
 
   // Generic draft update helper
   const updateDraft = useCallback(
@@ -120,18 +120,6 @@ export function GeneralSettings() {
     [config]
   );
 
-  // Optional: warn on tab close/navigation with unsaved changes
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [hasUnsavedChanges]);
-
   const playSound = async (soundFile: SoundFile) => {
     const audio = new Audio(`/api/sounds/${soundFile}`);
     try {
@@ -141,32 +129,56 @@ export function GeneralSettings() {
     }
   };
 
-  const handleSave = async () => {
-    if (!draft) return;
-
-    setSaving(true);
-    setError(null);
-    setSuccess(false);
-
-    try {
-      await updateAndSaveConfig(draft); // Atomically apply + persist
-      setTheme(draft.theme);
+  useEffect(() => {
+    if (!draft || !config || !dirty || branchPrefixError) return;
+    if (isEqual(draft, config)) {
       setDirty(false);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setError(t('settings.general.save.error'));
-      console.error('Error saving config:', err);
-    } finally {
-      setSaving(false);
+      return;
     }
-  };
 
-  const handleDiscard = () => {
-    if (!config) return;
-    setDraft(cloneDeep(config));
-    setDirty(false);
-  };
+    const saveSnapshot = cloneDeep(draft);
+    const saveSeq = ++saveSeqRef.current;
+    const timer = window.setTimeout(async () => {
+      setSaving(true);
+      setError(null);
+      setSuccess(false);
+
+      try {
+        const saved = await updateAndSaveConfig(saveSnapshot);
+        if (!saved) {
+          setError(t('settings.general.save.error'));
+          return;
+        }
+
+        if (saveSeq === saveSeqRef.current) {
+          setSuccess(true);
+          setTimeout(() => setSuccess(false), 3000);
+        }
+
+        if (isEqual(latestDraftRef.current, saveSnapshot)) {
+          setTheme(saveSnapshot.theme);
+          setDirty(false);
+        }
+      } catch (err) {
+        setError(t('settings.general.save.error'));
+        console.error('Error saving config:', err);
+      } finally {
+        if (saveSeq === saveSeqRef.current) {
+          setSaving(false);
+        }
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    branchPrefixError,
+    config,
+    dirty,
+    draft,
+    setTheme,
+    t,
+    updateAndSaveConfig,
+  ]);
 
   const resetDisclaimer = async () => {
     if (!config) return;
@@ -202,14 +214,6 @@ export function GeneralSettings() {
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert variant="success">
-          <AlertDescription className="font-medium">
-            {t('settings.general.save.success')}
-          </AlertDescription>
         </Alert>
       )}
 
@@ -613,34 +617,12 @@ export function GeneralSettings() {
         </CardContent>
       </Card>
 
-      {/* Sticky Save Button */}
-      <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t py-4">
-        <div className="flex items-center justify-between">
-          {hasUnsavedChanges ? (
-            <span className="text-sm text-muted-foreground">
-              {t('settings.general.save.unsavedChanges')}
-            </span>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleDiscard}
-              disabled={!hasUnsavedChanges || saving}
-            >
-              {t('settings.general.save.discard')}
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges || saving || !!branchPrefixError}
-            >
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('settings.general.save.button')}
-            </Button>
-          </div>
+      {saving && !success && (
+        <div className="flex items-center text-sm text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          {t('settings.general.save.button')}
         </div>
-      </div>
+      )}
     </div>
   );
 }

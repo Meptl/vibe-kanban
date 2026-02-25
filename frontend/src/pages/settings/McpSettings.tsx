@@ -254,18 +254,23 @@ export function McpSettings() {
         </Alert>
       )}
 
-      {success && (
-        <Alert variant="success">
-          <AlertDescription className="font-medium">
-            {t('settings.mcp.save.successMessage')}
-          </AlertDescription>
-        </Alert>
-      )}
-
       <Card>
         <CardHeader>
-          <CardTitle>{t('settings.mcp.title')}</CardTitle>
-          <CardDescription>{t('settings.mcp.description')}</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>{t('settings.mcp.title')}</CardTitle>
+              <CardDescription>{t('settings.mcp.description')}</CardDescription>
+            </div>
+            <Button
+              onClick={handleApplyMcpServers}
+              disabled={mcpApplying || mcpLoading || !!mcpError || success}
+              size="sm"
+            >
+              {mcpApplying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {success && <span className="mr-2">✓</span>}
+              {success ? t('settings.mcp.save.success') : t('settings.mcp.save.button')}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -441,22 +446,6 @@ export function McpSettings() {
           )}
         </CardContent>
       </Card>
-
-      {/* Sticky Save Button */}
-      <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t py-4">
-        <div className="flex justify-end">
-          <Button
-            onClick={handleApplyMcpServers}
-            disabled={mcpApplying || mcpLoading || !!mcpError || success}
-          >
-            {mcpApplying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {success && <span className="mr-2">✓</span>}
-            {success
-              ? t('settings.mcp.save.success')
-              : t('settings.mcp.save.button')}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }

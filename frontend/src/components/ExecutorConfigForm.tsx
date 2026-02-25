@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import Form from '@rjsf/core';
 import type { IChangeEvent } from '@rjsf/core';
 import { RJSFValidationError } from '@rjsf/utils';
@@ -18,6 +18,7 @@ interface ExecutorConfigFormProps {
   onSubmit?: (formData: unknown) => void;
   onChange?: (formData: unknown) => void;
   onSave?: (formData: unknown) => Promise<void>;
+  autoSave?: boolean;
   disabled?: boolean;
   isSaving?: boolean;
   isDirty?: boolean;
@@ -31,6 +32,7 @@ export function ExecutorConfigForm({
   onSubmit,
   onChange,
   onSave,
+  autoSave = false,
   disabled = false,
   isSaving = false,
   isDirty = false,
@@ -39,6 +41,7 @@ export function ExecutorConfigForm({
   const [validationErrors, setValidationErrors] = useState<
     RJSFValidationError[]
   >([]);
+  const autoSaveTimerRef = useRef<number | null>(null);
 
   const schema = useMemo(() => {
     return schemas[executor];
@@ -81,11 +84,35 @@ export function ExecutorConfigForm({
     setValidationErrors([]);
   }, [value, executor]);
 
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current !== null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleChange = (event: IChangeEvent<unknown>) => {
     const newFormData = event.formData;
+    const nextErrors = event.errors ?? [];
     setFormData(newFormData);
+    setValidationErrors(nextErrors);
     if (onChange) {
       onChange(newFormData);
+    }
+
+    if (autoSave && onSave) {
+      if (autoSaveTimerRef.current !== null) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+
+      if (disabled || nextErrors.length > 0) {
+        return;
+      }
+
+      autoSaveTimerRef.current = window.setTimeout(() => {
+        void onSave(newFormData);
+      }, 500);
     }
   };
 
@@ -133,19 +160,21 @@ export function ExecutorConfigForm({
             templates={shadcnTheme.templates}
             fields={shadcnTheme.fields}
           >
-            {onSave && (
-              <div className="flex justify-end pt-4">
-                <Button
-                  type="submit"
-                  disabled={!isDirty || validationErrors.length > 0 || isSaving}
-                >
-                  {isSaving && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Save Configuration
-                </Button>
-              </div>
-            )}
+            <>
+              {onSave && !autoSave && (
+                <div className="flex justify-end pt-4">
+                  <Button
+                    type="submit"
+                    disabled={!isDirty || validationErrors.length > 0 || isSaving}
+                  >
+                    {isSaving && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Save Configuration
+                  </Button>
+                </div>
+              )}
+            </>
           </Form>
         </CardContent>
       </Card>

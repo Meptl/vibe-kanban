@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cloneDeep, isEqual } from 'lodash';
 import {
@@ -24,8 +24,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Checkbox } from '@/components/ui/checkbox';
-import { JSONEditor } from '@/components/ui/json-editor';
 import { ChevronDown, Loader2 } from 'lucide-react';
 
 import { ExecutorConfigForm } from '@/components/ExecutorConfigForm';
@@ -48,7 +46,6 @@ export function AgentSettings() {
   // Use profiles hook for server state
   const {
     profilesContent: serverProfilesContent,
-    profilesPath,
     isLoading: profilesLoading,
     isSaving: profilesSaving,
     error: profilesError,
@@ -59,12 +56,9 @@ export function AgentSettings() {
     useUserSystem();
 
   // Local editor state (draft that may differ from server)
-  const [localProfilesContent, setLocalProfilesContent] = useState('');
   const [profilesSuccess, setProfilesSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Form-based editor state
-  const [useFormEditor, setUseFormEditor] = useState(true);
   const [selectedExecutorType, setSelectedExecutorType] =
     useState<BaseCodingAgent>('CLAUDE_CODE' as BaseCodingAgent);
   const [selectedConfiguration, setSelectedConfiguration] =
@@ -80,6 +74,7 @@ export function AgentSettings() {
   const [executorSaving, setExecutorSaving] = useState(false);
   const [executorSuccess, setExecutorSuccess] = useState(false);
   const [executorError, setExecutorError] = useState<string | null>(null);
+  const executorSaveSeqRef = useRef(0);
 
   // Check agent availability when draft executor changes
   const agentAvailability = useAgentAvailability(executorDraft?.executor);
@@ -87,8 +82,6 @@ export function AgentSettings() {
   // Sync server state to local state when not dirty
   useEffect(() => {
     if (!isDirty && serverProfilesContent) {
-      setLocalProfilesContent(serverProfilesContent);
-      // Parse JSON inside effect to avoid object dependency
       try {
         const parsed = JSON.parse(serverProfilesContent);
         setLocalParsedProfiles(parsed);
@@ -123,37 +116,47 @@ export function AgentSettings() {
     setExecutorDraft(newProfile);
   };
 
-  // Save executor profile
-  const handleSaveExecutorProfile = async () => {
-    if (!executorDraft || !config) return;
-
-    setExecutorSaving(true);
-    setExecutorError(null);
-
-    try {
-      await updateAndSaveConfig({ executor_profile: executorDraft });
-      setExecutorSuccess(true);
-      setTimeout(() => setExecutorSuccess(false), 3000);
-      reloadSystem();
-    } catch (err) {
-      setExecutorError(t('settings.general.save.error'));
-      console.error('Error saving executor profile:', err);
-    } finally {
-      setExecutorSaving(false);
-    }
-  };
-
-  // Sync raw profiles with parsed profiles
-  const syncRawProfiles = (profiles: unknown) => {
-    setLocalProfilesContent(JSON.stringify(profiles, null, 2));
-  };
-
   // Mark profiles as dirty
   const markDirty = (nextProfiles: unknown) => {
     setLocalParsedProfiles(nextProfiles as ExecutorConfigs);
-    syncRawProfiles(nextProfiles);
     setIsDirty(true);
   };
+
+  useEffect(() => {
+    if (!executorDraft || !config?.executor_profile) return;
+    if (!executorDirty) return;
+
+    const snapshot = cloneDeep(executorDraft);
+    const saveSeq = ++executorSaveSeqRef.current;
+    const timer = window.setTimeout(async () => {
+      setExecutorSaving(true);
+      setExecutorError(null);
+      setExecutorSuccess(false);
+
+      try {
+        const saved = await updateAndSaveConfig({ executor_profile: snapshot });
+        if (!saved) {
+          setExecutorError(t('settings.general.save.error'));
+          return;
+        }
+
+        if (saveSeq === executorSaveSeqRef.current) {
+          setExecutorSuccess(true);
+          setTimeout(() => setExecutorSuccess(false), 3000);
+        }
+        reloadSystem();
+      } catch (err) {
+        setExecutorError(t('settings.general.save.error'));
+        console.error('Error saving executor profile:', err);
+      } finally {
+        if (saveSeq === executorSaveSeqRef.current) {
+          setExecutorSaving(false);
+        }
+      }
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [config?.executor_profile, executorDirty, executorDraft, reloadSystem, t, updateAndSaveConfig]);
 
   // Open create dialog
   const openCreateDialog = async () => {
@@ -166,7 +169,7 @@ export function AgentSettings() {
       });
 
       if (result.action === 'created' && result.configName) {
-        createConfiguration(
+        void createConfiguration(
           selectedExecutorType,
           result.configName,
           result.cloneFrom
@@ -178,7 +181,7 @@ export function AgentSettings() {
   };
 
   // Create new configuration
-  const createConfiguration = (
+  const createConfiguration = async (
     executorType: string,
     configName: string,
     baseConfig?: string | null
@@ -207,6 +210,18 @@ export function AgentSettings() {
 
     markDirty(updatedProfiles);
     setSelectedConfiguration(configName);
+
+    try {
+      setSaveError(null);
+      await saveProfiles(JSON.stringify(updatedProfiles, null, 2));
+      setProfilesSuccess(true);
+      setIsDirty(false);
+      setTimeout(() => setProfilesSuccess(false), 3000);
+      reloadSystem();
+    } catch (err: unknown) {
+      console.error('Failed to save new configuration:', err);
+      setSaveError(t('settings.agents.errors.saveConfigFailed'));
+    }
   };
 
   // Open delete dialog
@@ -278,7 +293,6 @@ export function AgentSettings() {
 
         // Update local state and reset dirty flag
         setLocalParsedProfiles(updatedProfiles);
-        setLocalProfilesContent(JSON.stringify(updatedProfiles, null, 2));
         setIsDirty(false);
 
         // Select the next available configuration
@@ -300,50 +314,6 @@ export function AgentSettings() {
       }
     } catch (error) {
       console.error('Error deleting configuration:', error);
-    }
-  };
-
-  const handleProfilesChange = (value: string) => {
-    setLocalProfilesContent(value);
-    setIsDirty(true);
-
-    // Validate JSON on change
-    if (value.trim()) {
-      try {
-        const parsed = JSON.parse(value);
-        setLocalParsedProfiles(parsed);
-      } catch (err) {
-        // Invalid JSON, keep local content but clear parsed
-        setLocalParsedProfiles(null);
-      }
-    }
-  };
-
-  const handleSaveProfiles = async () => {
-    // Clear any previous errors
-    setSaveError(null);
-
-    try {
-      const contentToSave =
-        useFormEditor && localParsedProfiles
-          ? JSON.stringify(localParsedProfiles, null, 2)
-          : localProfilesContent;
-
-      await saveProfiles(contentToSave);
-      setProfilesSuccess(true);
-      setIsDirty(false);
-      setTimeout(() => setProfilesSuccess(false), 3000);
-
-      // Update the local content if using form editor
-      if (useFormEditor && localParsedProfiles) {
-        setLocalProfilesContent(contentToSave);
-      }
-
-      // Refresh global system so new profiles are available elsewhere
-      reloadSystem();
-    } catch (err: unknown) {
-      console.error('Failed to save profiles:', err);
-      setSaveError(t('settings.agents.errors.saveFailed'));
     }
   };
 
@@ -398,15 +368,10 @@ export function AgentSettings() {
 
     // Save the updated profiles directly
     try {
-      const contentToSave = JSON.stringify(updatedProfiles, null, 2);
-
-      await saveProfiles(contentToSave);
+      await saveProfiles(JSON.stringify(updatedProfiles, null, 2));
       setProfilesSuccess(true);
       setIsDirty(false);
       setTimeout(() => setProfilesSuccess(false), 3000);
-
-      // Update the local content as well
-      setLocalProfilesContent(contentToSave);
 
       // Refresh global system so new profiles are available elsewhere
       reloadSystem();
@@ -437,14 +402,6 @@ export function AgentSettings() {
         </Alert>
       )}
 
-      {profilesSuccess && (
-        <Alert variant="success">
-          <AlertDescription className="font-medium">
-            {t('settings.agents.save.success')}
-          </AlertDescription>
-        </Alert>
-      )}
-
       {saveError && (
         <Alert variant="destructive">
           <AlertDescription>{saveError}</AlertDescription>
@@ -454,14 +411,6 @@ export function AgentSettings() {
       {executorError && (
         <Alert variant="destructive">
           <AlertDescription>{executorError}</AlertDescription>
-        </Alert>
-      )}
-
-      {executorSuccess && (
-        <Alert variant="success">
-          <AlertDescription className="font-medium">
-            {t('settings.general.save.success')}
-          </AlertDescription>
         </Alert>
       )}
 
@@ -584,17 +533,12 @@ export function AgentSettings() {
               {t('settings.general.taskExecution.executor.helper')}
             </p>
           </div>
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSaveExecutorProfile}
-              disabled={!executorDirty || executorSaving}
-            >
-              {executorSaving && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+          {executorSaving && !executorSuccess && (
+            <div className="flex items-center justify-end text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {t('common:buttons.save')}
-            </Button>
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -604,23 +548,7 @@ export function AgentSettings() {
           <CardDescription>{t('settings.agents.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Editor type toggle */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="use-form-editor"
-              checked={!useFormEditor}
-              onCheckedChange={(checked) => setUseFormEditor(!checked)}
-              disabled={profilesLoading || !localParsedProfiles}
-            />
-            <Label htmlFor="use-form-editor">
-              {t('settings.agents.editor.formLabel')}
-            </Label>
-          </div>
-
-          {useFormEditor &&
-          localParsedProfiles &&
-          localParsedProfiles.executors ? (
-            // Form-based editor
+          {localParsedProfiles && localParsedProfiles.executors ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -747,6 +675,7 @@ export function AgentSettings() {
                         )
                       }
                       onSave={handleExecutorConfigSave}
+                      autoSave
                       disabled={profilesSaving}
                       isSaving={profilesSaving}
                       isDirty={isDirty}
@@ -756,56 +685,14 @@ export function AgentSettings() {
               })()}
             </div>
           ) : (
-            // Raw JSON editor
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="profiles-editor">
-                  {t('settings.agents.editor.jsonLabel')}
-                </Label>
-                <JSONEditor
-                  id="profiles-editor"
-                  placeholder={t('settings.agents.editor.jsonPlaceholder')}
-                  value={
-                    profilesLoading
-                      ? t('settings.agents.editor.jsonLoading')
-                      : localProfilesContent
-                  }
-                  onChange={handleProfilesChange}
-                  disabled={profilesLoading}
-                  minHeight={300}
-                />
-              </div>
-
-              {!profilesError && profilesPath && (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    <span className="font-medium">
-                      {t('settings.agents.editor.pathLabel')}
-                    </span>{' '}
-                    <span className="font-mono text-xs">{profilesPath}</span>
-                  </p>
-                </div>
-              )}
-            </div>
+            <Alert variant="destructive">
+              <AlertDescription>
+                {t('settings.agents.errors.saveFailed')}
+              </AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
-
-      {!useFormEditor && (
-        <div className="sticky bottom-0 z-10 bg-background/80 backdrop-blur-sm border-t py-4">
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSaveProfiles}
-              disabled={!isDirty || profilesSaving || !!profilesError}
-            >
-              {profilesSaving && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
-              {t('settings.agents.save.button')}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
