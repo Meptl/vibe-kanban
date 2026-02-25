@@ -169,7 +169,10 @@ impl NotificationService {
 
         let _handle = tokio::task::spawn_blocking(move || {
             let mut notification = Notification::new();
-            notification.summary(&title).timeout(10000);
+            notification
+                .appname("vibe-kanban")
+                .summary(&title)
+                .timeout(10000);
             if !message.is_empty() {
                 notification.body(&message);
             }
