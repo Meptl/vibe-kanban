@@ -5,7 +5,8 @@ Rough changes include:
 - Removal of telemetry, cloud, collab, and remote features
 - General UI/UX improvements
 - In app notifications
-- Backend MCP integration with agents
+- Automatic vk MCP integration with agents
+- Additional MCP features
 - Fixed features
 
 
