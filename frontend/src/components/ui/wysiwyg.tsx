@@ -231,7 +231,7 @@ function WYSIWYGEditor({
   if (disabled) {
     return (
       <div className="relative group">
-        <div className="sticky top-0 right-2 z-10 pointer-events-none h-0">
+        <div className="pointer-events-none absolute top-2 right-2 z-10">
           <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
             {/* Edit button - only if onEdit provided */}
             {onEdit && (

@@ -73,7 +73,7 @@ export function ReviewCommentRenderer({
       <WYSIWYGEditor
         value={comment.text}
         disabled={true}
-        className="text-sm text-foreground"
+        className="text-sm text-foreground [&_*]:!text-foreground"
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
