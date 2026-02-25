@@ -56,7 +56,6 @@ export function AgentSettings() {
     useUserSystem();
 
   // Local editor state (draft that may differ from server)
-  const [profilesSuccess, setProfilesSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [selectedExecutorType, setSelectedExecutorType] =
@@ -199,9 +198,7 @@ export function AgentSettings() {
     try {
       setSaveError(null);
       await saveProfiles(JSON.stringify(updatedProfiles, null, 2));
-      setProfilesSuccess(true);
       setIsDirty(false);
-      setTimeout(() => setProfilesSuccess(false), 3000);
       reloadSystem();
     } catch (err: unknown) {
       console.error('Failed to save new configuration:', err);
@@ -287,10 +284,6 @@ export function AgentSettings() {
         const nextSelected = nextConfigs[0] || 'DEFAULT';
         setSelectedConfiguration(nextSelected);
 
-        // Show success
-        setProfilesSuccess(true);
-        setTimeout(() => setProfilesSuccess(false), 3000);
-
         // Refresh global system so deleted configs are removed elsewhere
         reloadSystem();
       } catch (saveError: unknown) {
@@ -354,9 +347,7 @@ export function AgentSettings() {
     // Save the updated profiles directly
     try {
       await saveProfiles(JSON.stringify(updatedProfiles, null, 2));
-      setProfilesSuccess(true);
       setIsDirty(false);
-      setTimeout(() => setProfilesSuccess(false), 3000);
 
       // Refresh global system so new profiles are available elsewhere
       reloadSystem();
