@@ -41,8 +41,10 @@ use services::services::{
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
-use utils::diff::{Diff, DiffChangeKind, create_unified_diff};
-use utils::response::ApiResponse;
+use utils::{
+    diff::{Diff, DiffChangeKind, create_unified_diff},
+    response::ApiResponse,
+};
 use uuid::Uuid;
 
 use crate::{
@@ -186,7 +188,10 @@ pub async fn get_task_attempt_diff(
 
     let diffs = if let Some(merge) = &latest_merge
         && let Some(commit) = merge.merge_commit()
-        && deployment.container().is_container_clean(&task_attempt).await?
+        && deployment
+            .container()
+            .is_container_clean(&task_attempt)
+            .await?
         && !is_ahead
     {
         deployment.git().get_diffs(
@@ -213,11 +218,13 @@ pub async fn get_task_attempt_diff(
     };
 
     let built = build_patch_from_diffs(diffs);
-    Ok(ResponseJson(ApiResponse::success(TaskAttemptDiffResponse {
-        attempt_id: task_attempt.id,
-        patch: built.patch,
-        omitted_files: built.omitted_files,
-    })))
+    Ok(ResponseJson(ApiResponse::success(
+        TaskAttemptDiffResponse {
+            attempt_id: task_attempt.id,
+            patch: built.patch,
+            omitted_files: built.omitted_files,
+        },
+    )))
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]

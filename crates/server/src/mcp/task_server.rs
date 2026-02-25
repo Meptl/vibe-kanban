@@ -214,6 +214,36 @@ pub struct StartTaskAttemptRequest {
     pub base_branch: String,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ListTaskAttemptsRequest {
+    #[schemars(description = "The ID of the task to list attempts for")]
+    pub task_id: Uuid,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct TaskAttemptSummary {
+    #[schemars(description = "The unique identifier of the attempt")]
+    pub id: String,
+    #[schemars(description = "The task ID this attempt belongs to")]
+    pub task_id: String,
+}
+
+impl TaskAttemptSummary {
+    fn from_attempt(attempt: TaskAttempt) -> Self {
+        Self {
+            id: attempt.id.to_string(),
+            task_id: attempt.task_id.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct ListTaskAttemptsResponse {
+    pub task_id: String,
+    pub attempts: Vec<TaskAttemptSummary>,
+    pub count: usize,
+}
+
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct StartTaskAttemptResponse {
     pub task_id: String,
@@ -661,6 +691,31 @@ impl TaskServer {
         TaskServer::success(&response)
     }
 
+    #[tool(description = "List all attempts for a given task. `task_id` is required!")]
+    async fn list_attempts(
+        &self,
+        Parameters(ListTaskAttemptsRequest { task_id }): Parameters<ListTaskAttemptsRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let url = self.url(&format!("/api/task-attempts?task_id={task_id}"));
+        let attempts: Vec<TaskAttempt> = match self.send_json(self.client.get(&url)).await {
+            Ok(attempts) => attempts,
+            Err(e) => return Ok(e),
+        };
+
+        let attempt_summaries = attempts
+            .into_iter()
+            .map(TaskAttemptSummary::from_attempt)
+            .collect::<Vec<_>>();
+
+        let response = ListTaskAttemptsResponse {
+            task_id: task_id.to_string(),
+            count: attempt_summaries.len(),
+            attempts: attempt_summaries,
+        };
+
+        TaskServer::success(&response)
+    }
+
     #[tool(
         description = "Update an existing task/ticket's title, description, or status. `project_id` and `task_id` are required! `title`, `description`, and `status` are optional."
     )]
@@ -773,7 +828,7 @@ impl TaskServer {
 #[tool_handler]
 impl ServerHandler for TaskServer {
     fn get_info(&self) -> ServerInfo {
-        let mut instruction = "A task and project management server. If you need to create or update tickets or tasks then use these tools. Most of them absolutely require that you pass the `project_id` of the project that you are currently working on. You can get project ids by using `list projects`. Call `list_tasks` to fetch the `task_ids` of all the tasks in a project`.. TOOLS: 'list_projects', 'list_tasks', 'create_task', 'create_attempt', 'get_task', 'get_attempt_diff', 'update_task', 'delete_task'. Make sure to pass `project_id` or `task_id`/`attempt_id` where required. You can use list tools to get the available ids.".to_string();
+        let mut instruction = "A task and project management server. If you need to create or update tickets or tasks then use these tools. Most of them absolutely require that you pass the `project_id` of the project that you are currently working on. You can get project ids by using `list projects`. Call `list_tasks` to fetch the `task_ids` of all the tasks in a project`.. TOOLS: 'list_projects', 'list_tasks', 'create_task', 'create_attempt', 'list_attempts', 'get_task', 'get_attempt_diff', 'update_task', 'delete_task'. Make sure to pass `project_id` or `task_id`/`attempt_id` where required. You can use list tools to get the available ids.".to_string();
         if self.context.is_some() {
             let context_instruction = "Use 'get_context' to fetch project/task/attempt metadata for the active Vibe Kanban attempt when available.";
             instruction = format!("{} {}", context_instruction, instruction);

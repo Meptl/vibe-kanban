@@ -269,5 +269,4 @@ impl EventService {
 
         Ok(combined_stream)
     }
-
 }

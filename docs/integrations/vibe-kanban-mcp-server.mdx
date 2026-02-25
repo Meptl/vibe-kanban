@@ -75,6 +75,7 @@ The Vibe Kanban MCP server provides the following tools for managing projects, t
 | Tool | Purpose | Required Parameters | Optional Parameters | Returns |
 |------|---------|-------------------|-------------------|---------|
 | `create_attempt` | Start working on a task with a coding agent | `task_id`<br/>`executor`<br/>`base_branch` | `variant` | Attempt ID and confirmation |
+| `list_attempts` | List attempts for a task | `task_id` | None | List of attempts for the task |
 
 ### Supported Executors
 
@@ -144,7 +145,7 @@ This creates a new task attempt, generates a feature branch, and starts the codi
 4. Start a task attempt for the new task using Amp on the develop branch
 ```
 
-Each step uses the appropriate MCP tool (`list_projects`, `list_tasks`, `create_task`, `create_attempt`) to manage the complete workflow from planning to execution.
+Each step uses the appropriate MCP tool (`list_projects`, `list_tasks`, `create_task`, `create_attempt`, `list_attempts`) to manage the complete workflow from planning to execution.
 
 ### Internal Coding Agents (Within Vibe Kanban)
 
