@@ -77,19 +77,6 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
     });
   };
 
-  const handleCreateSubtask = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!projectId || !attempt) return;
-    const baseBranch = attempt.branch || attempt.target_branch;
-    if (!baseBranch) return;
-    openTaskForm({
-      mode: 'subtask',
-      projectId,
-      parentTaskAttemptId: attempt.id,
-      initialBaseBranch: baseBranch,
-    });
-  };
-
   const handleGitActions = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!attempt?.id) return;
@@ -139,12 +126,6 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleCreateNewAttempt}>
                 {t('actionsMenu.createNewAttempt')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!projectId || !attempt}
-                onClick={handleCreateSubtask}
-              >
-                {t('actionsMenu.createSubtask')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!attempt?.id}
