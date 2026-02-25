@@ -236,6 +236,24 @@ pub struct GetTaskResponse {
     pub task: TaskDetails,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetTaskAttemptDiffRequest {
+    #[schemars(description = "The ID of the task attempt to retrieve a diff/patch for")]
+    pub attempt_id: Uuid,
+}
+
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GetTaskAttemptDiffResponse {
+    #[schemars(description = "The ID of the task attempt")]
+    pub attempt_id: String,
+    #[schemars(description = "Unified diff/patch text for the task attempt")]
+    pub patch: String,
+    #[schemars(
+        description = "Files omitted from the patch (e.g. binary files, permission-only changes, or content omitted)"
+    )]
+    pub omitted_files: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskServer {
     client: reqwest::Client,
@@ -578,7 +596,7 @@ impl TaskServer {
     }
 
     #[tool(description = "Start working on a task by creating and launching a new task attempt.")]
-    async fn start_task_attempt(
+    async fn create_attempt(
         &self,
         Parameters(StartTaskAttemptRequest {
             task_id,
@@ -733,12 +751,29 @@ impl TaskServer {
 
         TaskServer::success(&response)
     }
+
+    #[tool(
+        description = "Get a unified diff/patch for a specific task attempt. Returns patch text plus any omitted files (for binary/unsupported changes). `attempt_id` is required."
+    )]
+    async fn get_attempt_diff(
+        &self,
+        Parameters(GetTaskAttemptDiffRequest { attempt_id }): Parameters<GetTaskAttemptDiffRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let url = self.url(&format!("/api/task-attempts/{attempt_id}/diff"));
+        let response: GetTaskAttemptDiffResponse = match self.send_json(self.client.get(&url)).await
+        {
+            Ok(r) => r,
+            Err(e) => return Ok(e),
+        };
+
+        TaskServer::success(&response)
+    }
 }
 
 #[tool_handler]
 impl ServerHandler for TaskServer {
     fn get_info(&self) -> ServerInfo {
-        let mut instruction = "A task and project management server. If you need to create or update tickets or tasks then use these tools. Most of them absolutely require that you pass the `project_id` of the project that you are currently working on. You can get project ids by using `list projects`. Call `list_tasks` to fetch the `task_ids` of all the tasks in a project`.. TOOLS: 'list_projects', 'list_tasks', 'create_task', 'start_task_attempt', 'get_task', 'update_task', 'delete_task'. Make sure to pass `project_id` or `task_id` where required. You can use list tools to get the available ids.".to_string();
+        let mut instruction = "A task and project management server. If you need to create or update tickets or tasks then use these tools. Most of them absolutely require that you pass the `project_id` of the project that you are currently working on. You can get project ids by using `list projects`. Call `list_tasks` to fetch the `task_ids` of all the tasks in a project`.. TOOLS: 'list_projects', 'list_tasks', 'create_task', 'create_attempt', 'get_task', 'get_attempt_diff', 'update_task', 'delete_task'. Make sure to pass `project_id` or `task_id`/`attempt_id` where required. You can use list tools to get the available ids.".to_string();
         if self.context.is_some() {
             let context_instruction = "Use 'get_context' to fetch project/task/attempt metadata for the active Vibe Kanban attempt when available.";
             instruction = format!("{} {}", context_instruction, instruction);

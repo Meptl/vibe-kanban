@@ -37,10 +37,11 @@ use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::{
     container::ContainerService,
-    git::{ConflictOp, WorktreeResetOptions},
+    git::{ConflictOp, DiffTarget, WorktreeResetOptions},
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
+use utils::diff::{Diff, DiffChangeKind, create_unified_diff};
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
@@ -74,6 +75,74 @@ pub struct DiffStreamQuery {
     pub stats_only: bool,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaskAttemptDiffResponse {
+    pub attempt_id: Uuid,
+    pub patch: String,
+    pub omitted_files: Vec<String>,
+}
+
+fn diff_path_label(diff: &Diff) -> String {
+    diff.new_path
+        .clone()
+        .or_else(|| diff.old_path.clone())
+        .unwrap_or_else(|| "<unknown>".to_string())
+}
+
+fn build_patch_from_diffs(diffs: Vec<Diff>) -> TaskAttemptDiffResponseBuilder {
+    let mut patch = String::new();
+    let mut omitted_files = Vec::new();
+
+    for diff in diffs {
+        let path = diff_path_label(&diff);
+
+        if diff.content_omitted {
+            omitted_files.push(path);
+            continue;
+        }
+
+        let patch_piece = match diff.change {
+            DiffChangeKind::Added => diff
+                .new_content
+                .as_deref()
+                .map(|new| create_unified_diff(&path, "", new)),
+            DiffChangeKind::Deleted => diff
+                .old_content
+                .as_deref()
+                .map(|old| create_unified_diff(&path, old, "")),
+            DiffChangeKind::Modified | DiffChangeKind::Renamed | DiffChangeKind::Copied => diff
+                .old_content
+                .as_deref()
+                .zip(diff.new_content.as_deref())
+                .map(|(old, new)| create_unified_diff(&path, old, new)),
+            DiffChangeKind::PermissionChange => None,
+        };
+
+        let Some(piece) = patch_piece else {
+            omitted_files.push(path);
+            continue;
+        };
+
+        // Skip header-only output (e.g. pure rename/no textual change).
+        if !piece.contains("@@ ") {
+            omitted_files.push(path);
+            continue;
+        }
+
+        patch.push_str(&piece);
+    }
+
+    TaskAttemptDiffResponseBuilder {
+        patch,
+        omitted_files,
+    }
+}
+
+struct TaskAttemptDiffResponseBuilder {
+    patch: String,
+    omitted_files: Vec<String>,
+}
+
 pub async fn get_task_attempts(
     State(deployment): State<DeploymentImpl>,
     Query(query): Query<TaskAttemptQuery>,
@@ -88,6 +157,67 @@ pub async fn get_task_attempt(
     State(_deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<TaskAttempt>>, ApiError> {
     Ok(ResponseJson(ApiResponse::success(task_attempt)))
+}
+
+pub async fn get_task_attempt_diff(
+    Extension(task_attempt): Extension<TaskAttempt>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<TaskAttemptDiffResponse>>, ApiError> {
+    let pool = &deployment.db().pool;
+
+    let task = task_attempt
+        .parent_task(pool)
+        .await?
+        .ok_or(ApiError::TaskAttempt(TaskAttemptError::TaskNotFound))?;
+    let ctx = TaskAttempt::load_context(pool, task_attempt.id, task.id, task.project_id).await?;
+
+    let project_repo_path = &ctx.project.git_repo_path;
+    let latest_merge = Merge::find_latest_by_task_attempt_id(pool, task_attempt.id).await?;
+
+    let is_ahead = deployment
+        .git()
+        .get_branch_status(
+            project_repo_path,
+            &task_attempt.branch,
+            &task_attempt.target_branch,
+        )
+        .map(|(ahead, _)| ahead > 0)
+        .unwrap_or(false);
+
+    let diffs = if let Some(merge) = &latest_merge
+        && let Some(commit) = merge.merge_commit()
+        && deployment.container().is_container_clean(&task_attempt).await?
+        && !is_ahead
+    {
+        deployment.git().get_diffs(
+            DiffTarget::Commit {
+                repo_path: project_repo_path,
+                commit_sha: &commit,
+            },
+            None,
+        )?
+    } else {
+        let worktree_path_buf = ensure_worktree_path(&deployment, &task_attempt).await?;
+        let base_commit = deployment.git().get_base_commit(
+            project_repo_path,
+            &task_attempt.branch,
+            &task_attempt.target_branch,
+        )?;
+        deployment.git().get_diffs(
+            DiffTarget::Worktree {
+                worktree_path: worktree_path_buf.as_path(),
+                base_commit: &base_commit,
+            },
+            None,
+        )?
+    };
+
+    let built = build_patch_from_diffs(diffs);
+    Ok(ResponseJson(ApiResponse::success(TaskAttemptDiffResponse {
+        attempt_id: task_attempt.id,
+        patch: built.patch,
+        omitted_files: built.omitted_files,
+    })))
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -1210,6 +1340,7 @@ pub async fn run_cleanup_script(
 pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     let task_attempt_id_router = Router::new()
         .route("/", get(get_task_attempt))
+        .route("/diff", get(get_task_attempt_diff))
         .route("/follow-up", post(follow_up))
         .route("/run-agent-setup", post(run_agent_setup))
         .route("/commit-compare", get(compare_commit_to_head))
