@@ -224,11 +224,8 @@ export function McpSettings() {
           { name?: string; description?: string; url?: string; icon?: string }
         >)
       : {};
-  const hiddenPreconfiguredServerKeys = new Set(['vibe_kanban']);
   const servers = Object.fromEntries(
-    Object.entries(preconfiguredObj).filter(
-      ([k]) => k !== 'meta' && !hiddenPreconfiguredServerKeys.has(k)
-    )
+    Object.entries(preconfiguredObj).filter(([k]) => k !== 'meta')
   ) as Record<string, unknown>;
   const getMetaFor = (key: string) => meta[key] || {};
 
