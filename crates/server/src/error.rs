@@ -5,8 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use db::models::{
-    execution_process::ExecutionProcessError, project::ProjectError, scratch::ScratchError,
-    task_attempt::TaskAttemptError,
+    execution_process::ExecutionProcessError, project::ProjectError, task_attempt::TaskAttemptError,
 };
 use executors::executors::ExecutorError;
 use git2::Error as Git2Error;
@@ -28,8 +27,6 @@ pub enum ApiError {
     Project(#[from] ProjectError),
     #[error(transparent)]
     TaskAttempt(#[from] TaskAttemptError),
-    #[error(transparent)]
-    ScratchError(#[from] ScratchError),
     #[error(transparent)]
     ExecutionProcess(#[from] ExecutionProcessError),
     #[error(transparent)]
@@ -81,7 +78,6 @@ impl IntoResponse for ApiError {
         let (status_code, error_type) = match &self {
             ApiError::Project(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ProjectError"),
             ApiError::TaskAttempt(_) => (StatusCode::INTERNAL_SERVER_ERROR, "TaskAttemptError"),
-            ApiError::ScratchError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ScratchError"),
             ApiError::ExecutionProcess(err) => match err {
                 ExecutionProcessError::ExecutionProcessNotFound => {
                     (StatusCode::NOT_FOUND, "ExecutionProcessError")

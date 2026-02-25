@@ -36,16 +36,6 @@ export type DraftReviewCommentData = { file_path: string, line_number: number, s
 
 export type DraftFollowUpData = { message: string, variant: string | null, review_comments: Array<DraftReviewCommentData>, };
 
-export type ScratchPayload = { "type": "DRAFT_TASK", "data": string } | { "type": "DRAFT_FOLLOW_UP", "data": DraftFollowUpData };
-
-export enum ScratchType { DRAFT_TASK = "DRAFT_TASK", DRAFT_FOLLOW_UP = "DRAFT_FOLLOW_UP" }
-
-export type Scratch = { id: string, payload: ScratchPayload, created_at: string, updated_at: string, };
-
-export type CreateScratch = { payload: ScratchPayload, };
-
-export type UpdateScratch = { payload: ScratchPayload, };
-
 export type Image = { id: string, file_path: string, original_name: string, mime_type: string | null, size_bytes: bigint, hash: string, created_at: string, updated_at: string, };
 
 export type CreateImage = { file_path: string, original_name: string, mime_type: string | null, size_bytes: bigint, hash: string, };

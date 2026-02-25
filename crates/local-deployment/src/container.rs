@@ -18,7 +18,7 @@ use db::{
         executor_session::ExecutorSession,
         merge::Merge,
         project::Project,
-        scratch::{DraftFollowUpData, Scratch, ScratchType},
+        scratch::DraftFollowUpData,
         task::{Task, TaskStatus},
         task_attempt::TaskAttempt,
     },
@@ -439,20 +439,6 @@ impl LocalContainerService {
                                 "Found queued message for attempt {}, starting follow-up execution",
                                 ctx.task_attempt.id
                             );
-
-                            // Delete the scratch since we're consuming the queued message
-                            if let Err(e) = Scratch::delete(
-                                &db.pool,
-                                ctx.task_attempt.id,
-                                &ScratchType::DraftFollowUp,
-                            )
-                            .await
-                            {
-                                tracing::warn!(
-                                    "Failed to delete scratch after consuming queued message: {}",
-                                    e
-                                );
-                            }
 
                             // Execute the queued follow-up
                             if let Err(e) = container
