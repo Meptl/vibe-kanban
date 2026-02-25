@@ -19,13 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { PlainTextTagTextarea } from '@/components/ui/plain-text-tag-textarea';
 import BranchSelector from '@/components/tasks/BranchSelector';
 import { ExecutorProfileSelector } from '@/components/settings';
@@ -75,7 +68,6 @@ export type TaskFormDialogProps =
 type TaskFormValues = {
   title: string;
   description: string;
-  status: TaskStatus;
   executorProfileId: ExecutorProfileId | null;
   branch: string;
   autoStart: boolean;
@@ -133,7 +125,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
         return {
           title: props.task.title,
           description: props.task.description || '',
-          status: props.task.status,
           executorProfileId: baseProfile,
           branch: defaultBranch || '',
           autoStart: false,
@@ -143,7 +134,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
         return {
           title: props.initialTask.title,
           description: props.initialTask.description || '',
-          status: 'todo',
           executorProfileId: baseProfile,
           branch: defaultBranch || '',
           autoStart: true,
@@ -155,7 +145,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
         return {
           title: '',
           description: '',
-          status: 'todo',
           executorProfileId: baseProfile,
           branch: defaultBranch || '',
           autoStart: true,
@@ -171,7 +160,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
         data: {
           title: value.title,
           description: value.description,
-          status: value.status,
           parent_task_attempt: null,
           image_ids: images.length > 0 ? images.map((img) => img.id) : null,
         },
@@ -453,49 +441,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
               )}
             </form.Field>
           </div>
-
-          {/* Edit mode status */}
-          {editMode && (
-            <div className="flex-none px-4 py-3 border border-1 border-border">
-              <form.Field name="status">
-                {(field) => (
-                  <div className="space-y-2">
-                    <Label htmlFor="task-status" className="text-sm font-medium">
-                      {t('taskFormDialog.statusLabel')}
-                    </Label>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(value) =>
-                        field.handleChange(value as TaskStatus)
-                      }
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger id="task-status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todo">
-                          {t('taskFormDialog.statusOptions.todo')}
-                        </SelectItem>
-                        <SelectItem value="inprogress">
-                          {t('taskFormDialog.statusOptions.inprogress')}
-                        </SelectItem>
-                        <SelectItem value="inreview">
-                          {t('taskFormDialog.statusOptions.inreview')}
-                        </SelectItem>
-                        <SelectItem value="done">
-                          {t('taskFormDialog.statusOptions.done')}
-                        </SelectItem>
-                        <SelectItem value="cancelled">
-                          {t('taskFormDialog.statusOptions.cancelled')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </form.Field>
-            </div>
-          )}
 
           {/* Start dropdowns */}
           <form.Field name="autoStart" mode="array">
