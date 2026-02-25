@@ -157,7 +157,7 @@ const VirtualizedList = ({ attempt }: VirtualizedListProps) => {
           />
         </VirtuosoMessageListLicense>
         {!loading && hasVisibleEntries && !isAtBottom && (
-          <div className="absolute bottom-3 right-[11px] z-10">
+          <div className="absolute bottom-3 right-[13px] z-10">
             <Button
               size="icon"
               variant="outline"
