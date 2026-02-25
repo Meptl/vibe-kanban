@@ -71,8 +71,6 @@ export function AgentSettings() {
   const [executorDraft, setExecutorDraft] = useState<ExecutorProfileId | null>(
     () => (config?.executor_profile ? cloneDeep(config.executor_profile) : null)
   );
-  const [executorSaving, setExecutorSaving] = useState(false);
-  const [executorSuccess, setExecutorSuccess] = useState(false);
   const [executorError, setExecutorError] = useState<string | null>(null);
   const executorSaveSeqRef = useRef(0);
 
@@ -128,34 +126,21 @@ export function AgentSettings() {
 
     const snapshot = cloneDeep(executorDraft);
     const saveSeq = ++executorSaveSeqRef.current;
-    const timer = window.setTimeout(async () => {
-      setExecutorSaving(true);
-      setExecutorError(null);
-      setExecutorSuccess(false);
 
-      try {
-        const saved = await updateAndSaveConfig({ executor_profile: snapshot });
-        if (!saved) {
-          setExecutorError(t('settings.general.save.error'));
-          return;
-        }
+    setExecutorError(null);
 
-        if (saveSeq === executorSaveSeqRef.current) {
-          setExecutorSuccess(true);
-          setTimeout(() => setExecutorSuccess(false), 3000);
-        }
-        reloadSystem();
-      } catch (err) {
+    updateAndSaveConfig({ executor_profile: snapshot }).then((saved) => {
+      if (!saved) {
         setExecutorError(t('settings.general.save.error'));
-        console.error('Error saving executor profile:', err);
-      } finally {
-        if (saveSeq === executorSaveSeqRef.current) {
-          setExecutorSaving(false);
-        }
+        return;
       }
-    }, 400);
-
-    return () => window.clearTimeout(timer);
+      if (saveSeq === executorSaveSeqRef.current) {
+        reloadSystem();
+      }
+    }).catch((err) => {
+      setExecutorError(t('settings.general.save.error'));
+      console.error('Error saving executor profile:', err);
+    });
   }, [config?.executor_profile, executorDirty, executorDraft, reloadSystem, t, updateAndSaveConfig]);
 
   // Open create dialog
@@ -533,12 +518,6 @@ export function AgentSettings() {
               {t('settings.general.taskExecution.executor.helper')}
             </p>
           </div>
-          {executorSaving && !executorSuccess && (
-            <div className="flex items-center justify-end text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {t('common:buttons.save')}
-            </div>
-          )}
         </CardContent>
       </Card>
 
