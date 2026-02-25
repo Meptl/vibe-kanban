@@ -55,6 +55,7 @@ export function PreviewPanel() {
   const [showLogs, setShowLogs] = useState(false);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string>();
   const listenerRef = useRef<ClickToComponentListener | null>(null);
+  const hasAttemptedAutoStartRef = useRef(false);
 
   const { t } = useTranslation('tasks');
   const { project, projectId } = useProject();
@@ -196,6 +197,22 @@ export function PreviewPanel() {
       },
     });
   };
+
+  useEffect(() => {
+    if (!attemptId) return;
+    if (!projectHasDevScript) return;
+    if (hasAttemptedAutoStartRef.current) return;
+    if (runningDevServer || isStartingDevServer) return;
+
+    hasAttemptedAutoStartRef.current = true;
+    handleStartDevServer();
+  }, [
+    attemptId,
+    projectHasDevScript,
+    runningDevServer,
+    isStartingDevServer,
+    handleStartDevServer,
+  ]);
 
   if (!attemptId) {
     return (
