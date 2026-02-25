@@ -971,7 +971,7 @@ export function ProjectTasks() {
         }
       >
         <div className="mx-auto w-full">
-          <div className="flex items-start gap-1">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words hover:underline"
