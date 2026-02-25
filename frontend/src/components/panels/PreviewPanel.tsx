@@ -16,6 +16,36 @@ import { PreviewToolbar } from '@/components/tasks/TaskDetails/preview/PreviewTo
 import { NoServerContent } from '@/components/tasks/TaskDetails/preview/NoServerContent';
 import { ReadyContent } from '@/components/tasks/TaskDetails/preview/ReadyContent';
 
+function normalizePreviewNavigationTarget(
+  rawTarget: string,
+  currentUrl?: string
+): string | null {
+  const target = rawTarget.trim();
+  if (!target) {
+    return null;
+  }
+
+  try {
+    return new URL(target).toString();
+  } catch {
+    // Fall through to relative/host-only parsing.
+  }
+
+  if (currentUrl) {
+    try {
+      return new URL(target, currentUrl).toString();
+    } catch {
+      // Continue to host-only fallback.
+    }
+  }
+
+  try {
+    return new URL(`http://${target}`).toString();
+  } catch {
+    return null;
+  }
+}
+
 export function PreviewPanel() {
   const [iframeError, setIframeError] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -23,6 +53,7 @@ export function PreviewPanel() {
   const [showHelp, setShowHelp] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showLogs, setShowLogs] = useState(false);
+  const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string>();
   const listenerRef = useRef<ClickToComponentListener | null>(null);
 
   const { t } = useTranslation('tasks');
@@ -51,6 +82,12 @@ export function PreviewPanel() {
     lastKnownUrl,
   });
 
+  useEffect(() => {
+    setCurrentPreviewUrl(previewState.url);
+  }, [previewState.url]);
+
+  const effectivePreviewUrl = currentPreviewUrl ?? previewState.url;
+
   const handleRefresh = () => {
     setIframeError(false);
     setRefreshKey((prev) => prev + 1);
@@ -62,9 +99,22 @@ export function PreviewPanel() {
   const { addElement } = useClickedElements();
 
   const handleCopyUrl = async () => {
-    if (previewState.url) {
-      await navigator.clipboard.writeText(previewState.url);
+    if (effectivePreviewUrl) {
+      await navigator.clipboard.writeText(effectivePreviewUrl);
     }
+  };
+
+  const handleNavigate = (target: string) => {
+    const nextUrl = normalizePreviewNavigationTarget(target, effectivePreviewUrl);
+    if (!nextUrl) {
+      return;
+    }
+    setIframeError(false);
+    setCurrentPreviewUrl(nextUrl);
+  };
+
+  const handleIframeLoad = (loadedUrl: string) => {
+    setCurrentPreviewUrl((prev) => (prev === loadedUrl ? prev : loadedUrl));
   };
 
   useEffect(() => {
@@ -118,7 +168,7 @@ export function PreviewPanel() {
 
   const isPreviewReady =
     previewState.status === 'ready' &&
-    Boolean(previewState.url) &&
+    Boolean(effectivePreviewUrl) &&
     !iframeError;
   const mode = iframeError
     ? 'error'
@@ -165,16 +215,18 @@ export function PreviewPanel() {
           <>
             <PreviewToolbar
               mode={mode}
-              url={previewState.url}
+              url={effectivePreviewUrl}
               onRefresh={handleRefresh}
               onCopyUrl={handleCopyUrl}
               onStop={stopDevServer}
+              onNavigate={handleNavigate}
               isStopping={isStoppingDevServer}
             />
             <ReadyContent
-              url={previewState.url}
-              iframeKey={`${previewState.url}-${refreshKey}`}
+              url={effectivePreviewUrl}
+              iframeKey={`${effectivePreviewUrl}-${refreshKey}`}
               onIframeError={handleIframeError}
+              onIframeLoad={handleIframeLoad}
             />
           </>
         ) : (

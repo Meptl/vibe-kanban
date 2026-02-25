@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { ExternalLink, RefreshCw, Copy, Loader2, Pause } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +17,7 @@ interface PreviewToolbarProps {
   onRefresh: () => void;
   onCopyUrl: () => void;
   onStop: () => void;
+  onNavigate?: (url: string) => void;
   isStopping?: boolean;
 }
 
@@ -24,9 +27,25 @@ export function PreviewToolbar({
   onRefresh,
   onCopyUrl,
   onStop,
+  onNavigate,
   isStopping,
 }: PreviewToolbarProps) {
   const { t } = useTranslation('tasks');
+  const [draftUrl, setDraftUrl] = useState(url ?? '');
+
+  useEffect(() => {
+    setDraftUrl(url ?? '');
+  }, [url]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const nextUrl = draftUrl.trim();
+    if (!nextUrl) {
+      setDraftUrl(url ?? '');
+      return;
+    }
+    onNavigate?.(nextUrl);
+  };
 
   const actions =
     mode !== 'noServer' ? (
@@ -119,14 +138,26 @@ export function PreviewToolbar({
 
   return (
     <NewCardHeader className="shrink-0" actions={actions}>
-      <div className="flex items-center">
-        <span
-          className="text-sm text-muted-foreground font-mono truncate whitespace-nowrap"
-          aria-live="polite"
-        >
-          {url || <Loader2 className="h-4 w-4 animate-spin" />}
-        </span>
-      </div>
+      <form onSubmit={handleSubmit} className="flex items-center w-full">
+        {url ? (
+          <Input
+            value={draftUrl}
+            onChange={(e) => setDraftUrl(e.target.value)}
+            className="h-8 font-mono text-xs rounded-sm"
+            aria-label={t('preview.toolbar.openInTab')}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+        ) : (
+          <div
+            className="text-muted-foreground flex items-center"
+            aria-live="polite"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+        )}
+      </form>
     </NewCardHeader>
   );
 }
