@@ -746,7 +746,7 @@ export function ProjectTasks() {
           const confirmResult = await ConfirmDialog.show({
             title: 'Start a new attempt?',
             message:
-              'This task already has an attempt. Starting a new attempt will switch to a new conversation and you may lose your current conversation history.',
+              "This task already has an attempt. If you're looking to continue this conversation, do so in the chat window.",
             confirmText: 'Start New Attempt',
             cancelText: 'Cancel',
             variant: 'destructive',
