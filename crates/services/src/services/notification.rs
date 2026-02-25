@@ -169,7 +169,10 @@ impl NotificationService {
 
         let _handle = tokio::task::spawn_blocking(move || {
             let mut notification = Notification::new();
-            notification.summary(&title).body(&message).timeout(10000);
+            notification.summary(&title).timeout(10000);
+            if !message.is_empty() {
+                notification.body(&message);
+            }
 
             if let Some(url) = url {
                 notification.action("open", "Open");

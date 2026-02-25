@@ -13,10 +13,17 @@ param(
 )
 
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-$Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$TemplateType = if ([string]::IsNullOrWhiteSpace($Message)) {
+    [Windows.UI.Notifications.ToastTemplateType]::ToastText01
+} else {
+    [Windows.UI.Notifications.ToastTemplateType]::ToastText02
+}
+$Template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent($TemplateType)
 $RawXml = [xml] $Template.GetXml()
 ($RawXml.toast.visual.binding.text|where {$_.id -eq "1"}).AppendChild($RawXml.CreateTextNode($Title)) | Out-Null
-($RawXml.toast.visual.binding.text|where {$_.id -eq "2"}).AppendChild($RawXml.CreateTextNode($Message)) | Out-Null
+if (-not [string]::IsNullOrWhiteSpace($Message)) {
+    ($RawXml.toast.visual.binding.text|where {$_.id -eq "2"}).AppendChild($RawXml.CreateTextNode($Message)) | Out-Null
+}
 if ($Url) {
     $RawXml.toast.SetAttribute("activationType", "protocol")
     $RawXml.toast.SetAttribute("launch", $Url)
