@@ -13,7 +13,6 @@ import { useEffect, useRef } from 'react';
 import { useHotkeysContext } from 'react-hotkeys-hook';
 import { useKeyExit } from '@/keyboard/hooks';
 import { Scope } from '@/keyboard/registry';
-import { TaskNotificationsBell } from '@/components/layout/TaskNotificationsBell';
 
 const settingsNavigation = [
   {
@@ -87,7 +86,6 @@ export function SettingsLayout() {
             {t('settings.layout.nav.title')}
           </h1>
           <div className="flex items-center gap-2">
-            <TaskNotificationsBell />
             <Button
               variant="ghost"
               onClick={handleBack}
