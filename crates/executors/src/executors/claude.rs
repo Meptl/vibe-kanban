@@ -76,6 +76,32 @@ pub struct ClaudeCode {
 }
 
 impl ClaudeCode {
+    fn vk_mcp_command_config_arg_with_port(mcp_port: &str) -> String {
+        let config = serde_json::json!({
+            "mcpServers": {
+                "vk": {
+                    "type": "http",
+                    "url": format!("http://127.0.0.1:{mcp_port}/mcp")
+                }
+            }
+        });
+
+        // CommandBuilder tokenizes through shell-like splitting, so JSON quotes must
+        // be escaped to survive as a single valid JSON argument value.
+        serde_json::to_string(&config)
+            .expect("failed to serialize Claude MCP config")
+            .replace('"', "\\\"")
+    }
+
+    fn vk_mcp_command_config_arg() -> String {
+        let mcp_port = std::env::var("MCP_PORT")
+            .ok()
+            .filter(|value| value.parse::<u16>().is_ok())
+            .unwrap_or_else(|| "3002".to_string());
+
+        Self::vk_mcp_command_config_arg_with_port(&mcp_port)
+    }
+
     async fn build_command_builder(&self) -> CommandBuilder {
         // If base_command_override is provided and claude_code_router is also set, log a warning
         if self.cmd.base_command_override.is_some() && self.claude_code_router.is_some() {
@@ -107,6 +133,7 @@ impl ClaudeCode {
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model]);
         }
+        builder = builder.extend_params(["--mcp-config", &Self::vk_mcp_command_config_arg()]);
         builder = builder.extend_params([
             "--verbose",
             "--output-format=stream-json",
