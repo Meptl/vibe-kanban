@@ -85,7 +85,7 @@ export function TaskCard({
       isOpen={isOpen}
       forwardedRef={localRef}
     >
-      <div className="flex flex-col gap-2">
+      <div className="group flex flex-col gap-2">
         <TaskCardHeader
           title={task.title}
           right={
@@ -111,7 +111,10 @@ export function TaskCard({
                   <Link className="h-4 w-4" />
                 </Button>
               )}
-              <ActionsDropdown task={task} />
+              <ActionsDropdown
+                task={task}
+                triggerClassName="h-5 w-4 rounded-sm opacity-0 transition-[opacity,background-color,color] group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 hover:bg-foreground/10 hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
             </>
           }
         />

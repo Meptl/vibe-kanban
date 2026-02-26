@@ -17,13 +17,19 @@ import { CreateAttemptDialog } from '@/components/dialogs/tasks/CreateAttemptDia
 import { GitActionsDialog } from '@/components/dialogs/tasks/GitActionsDialog';
 import { useProject } from '@/contexts/ProjectContext';
 import { openTaskForm } from '@/lib/openTaskForm';
+import { cn } from '@/lib/utils';
 
 interface ActionsDropdownProps {
   task?: TaskWithAttemptStatus | null;
   attempt?: TaskAttempt | null;
+  triggerClassName?: string;
 }
 
-export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
+export function ActionsDropdown({
+  task,
+  attempt,
+  triggerClassName,
+}: ActionsDropdownProps) {
   const { t } = useTranslation('tasks');
   const { projectId } = useProject();
   const openInEditor = useOpenInEditor(attempt?.id);
@@ -94,6 +100,7 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
           <Button
             variant="icon"
             aria-label="Actions"
+            className={cn(triggerClassName)}
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
