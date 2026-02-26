@@ -386,11 +386,51 @@ export function PlainTextTagTextarea({
                     </>
                   )}
 
-                  {options.some((o) => o.type === 'file') && (
+                  {options.some((o) => o.type === 'task') && (
                     <>
                       {options.some((o) => o.type === 'tag') && (
                         <div className="border-t my-1" />
                       )}
+                      <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase">
+                        Tasks
+                      </div>
+                      {options.map((option, index) => {
+                        if (option.type !== 'task' || !option.task) return null;
+                        const task = option.task;
+                        const taskAlias = toTaskMentionAlias(task.title);
+                        return (
+                          <button
+                            key={`task-${task.id}`}
+                            type="button"
+                            ref={(el) => {
+                              if (el) itemRefs.current.set(index, el);
+                              else itemRefs.current.delete(index);
+                            }}
+                            className={cn(
+                              'w-full text-left px-3 py-2 cursor-pointer text-sm',
+                              index === selectedIndex
+                                ? 'bg-muted text-foreground'
+                                : 'hover:bg-muted'
+                            )}
+                            onMouseEnter={() => setSelectedIndex(index)}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleSelect(index)}
+                          >
+                            <div className="flex items-center gap-2 font-medium truncate">
+                              <List className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                              @{taskAlias}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+
+                  {options.some((o) => o.type === 'file') && (
+                    <>
+                      {options.some(
+                        (o) => o.type === 'tag' || o.type === 'task'
+                      ) && <div className="border-t my-1" />}
                       <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase">
                         Files
                       </div>
@@ -421,46 +461,6 @@ export function PlainTextTagTextarea({
                             </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {file.path}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {options.some((o) => o.type === 'task') && (
-                    <>
-                      {options.some(
-                        (o) => o.type === 'tag' || o.type === 'file'
-                      ) && <div className="border-t my-1" />}
-                      <div className="px-3 py-1 text-xs font-semibold text-muted-foreground uppercase">
-                        Tasks
-                      </div>
-                      {options.map((option, index) => {
-                        if (option.type !== 'task' || !option.task) return null;
-                        const task = option.task;
-                        const taskAlias = toTaskMentionAlias(task.title);
-                        return (
-                          <button
-                            key={`task-${task.id}`}
-                            type="button"
-                            ref={(el) => {
-                              if (el) itemRefs.current.set(index, el);
-                              else itemRefs.current.delete(index);
-                            }}
-                            className={cn(
-                              'w-full text-left px-3 py-2 cursor-pointer text-sm',
-                              index === selectedIndex
-                                ? 'bg-muted text-foreground'
-                                : 'hover:bg-muted'
-                            )}
-                            onMouseEnter={() => setSelectedIndex(index)}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleSelect(index)}
-                          >
-                            <div className="flex items-center gap-2 font-medium truncate">
-                              <List className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                              @{taskAlias}
                             </div>
                           </button>
                         );
