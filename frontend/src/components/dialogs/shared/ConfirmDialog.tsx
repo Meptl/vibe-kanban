@@ -13,6 +13,7 @@ import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
 import { defineModal, type ConfirmResult } from '@/lib/modals';
 import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 export interface ConfirmDialogProps {
   title: string;
@@ -25,6 +26,7 @@ export interface ConfirmDialogProps {
   checkboxDescription?: string;
   checkboxDefaultChecked?: boolean;
   onCheckboxChange?: (checked: boolean) => void;
+  contentClassName?: string;
 }
 
 const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
@@ -40,6 +42,7 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
     checkboxDescription,
     checkboxDefaultChecked = false,
     onCheckboxChange,
+    contentClassName,
   } = props;
   const [isChecked, setIsChecked] = useState(checkboxDefaultChecked);
 
@@ -79,7 +82,7 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
 
   return (
     <Dialog open={modal.visible} onOpenChange={handleCancel}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className={cn(contentClassName ?? 'sm:max-w-[425px]')}>
         <DialogHeader>
           <div className="flex items-center gap-3">
             {getIcon()}
@@ -90,7 +93,7 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
           </DialogDescription>
         </DialogHeader>
         {hasCheckbox && (
-          <div className="flex items-start space-x-2">
+          <div className="flex items-center space-x-2">
             <Checkbox
               id="confirm-dialog-checkbox"
               checked={isChecked}
