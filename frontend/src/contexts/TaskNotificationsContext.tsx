@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, CheckCircle, XCircle } from 'lucide-react';
 import type { TaskWithAttemptStatus } from 'shared/types';
 import {
   taskNotificationsApi,
@@ -45,6 +46,7 @@ interface InAppToast {
   projectId: string;
   taskId: string;
   title: string;
+  outcome: TaskNotificationOutcome;
 }
 
 const TaskNotificationsContext =
@@ -170,7 +172,8 @@ export function TaskNotificationsProvider({
       id: notification.id,
       projectId: notification.projectId,
       taskId: notification.taskId,
-      title: notificationTitle(notification),
+      title: notification.taskTitle,
+      outcome: notification.outcome,
     };
 
     setToasts((prev) => [toast, ...prev.slice(0, 4)]);
@@ -346,9 +349,19 @@ export function TaskNotificationsProvider({
               removeToast(toast.id);
               navigate(paths.task(toast.projectId, toast.taskId));
             }}
-            className="pointer-events-auto rounded-md border border-border bg-background px-4 py-3 text-left shadow-md transition hover:bg-accent"
+            className="group pointer-events-auto rounded-md border border-border bg-background px-4 py-3 text-left shadow-md transition hover:bg-accent"
           >
-            <div className="text-sm font-medium text-foreground">{toast.title}</div>
+            <div className="flex items-center gap-2">
+              {toast.outcome === 'failed' ? (
+                <XCircle className="h-4 w-4 shrink-0 text-rose-500" />
+              ) : (
+                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+              )}
+              <div className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                {toast.title}
+              </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
           </button>
         ))}
       </div>
