@@ -38,6 +38,7 @@ export const AttemptHeaderActions = ({
   const { t } = useTranslation('tasks');
   const isXL = useMediaQuery('(min-width: 1280px)');
   const isPreviewMode = mode !== 'diffs';
+  const isDiffMode = mode === 'diffs';
   const nextMode: LayoutMode = isPreviewMode ? 'diffs' : 'preview';
 
   return (
@@ -51,11 +52,11 @@ export const AttemptHeaderActions = ({
                   variant="icon"
                   onClick={() => onModeChange(nextMode)}
                   aria-label={`Switch to ${t(`attemptHeaderActions.${nextMode}`)}`}
-                  className={`h-7 w-7 border border-border transition-all duration-200 ${
+                  className={`h-7 w-7 transition-all duration-200 ${
                     isPreviewMode ? 'rounded-full' : 'rounded-sm'
                   }`}
                 >
-                  {isPreviewMode ? (
+                  {isDiffMode ? (
                     <Eye className="h-4 w-4" />
                   ) : (
                     <FileDiff className="h-4 w-4" />
