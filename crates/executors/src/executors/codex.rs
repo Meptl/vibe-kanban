@@ -37,6 +37,7 @@ use crate::{
         AppendPrompt, AvailabilityInfo, ExecutorError, ExecutorExitResult, SpawnedChild,
         StandardCodingAgentExecutor,
         codex::{jsonrpc::ExitSignalSender, normalize_logs::Error},
+        vk_mcp_port_from_env,
     },
     stdout_dup::create_stdout_pipe_writer,
 };
@@ -148,6 +149,16 @@ impl StandardCodingAgentExecutor for Codex {
         self.approvals = Some(approvals);
     }
 
+    fn vk_mcp_cli(&self) -> Vec<String> {
+        let Some(mcp_port) = vk_mcp_port_from_env() else {
+            return Vec::new();
+        };
+        vec![
+            "-c".to_string(),
+            format!("mcp_servers.vk.url=\"http://127.0.0.1:{mcp_port}/mcp\""),
+        ]
+    }
+
     async fn spawn(
         &self,
         current_dir: &Path,
@@ -215,21 +226,11 @@ impl Codex {
 
     pub fn base_command_builder() -> CommandBuilder {
         CommandBuilder::new(Self::base_command())
-            .extend_params(["-c"])
-            .extend_params([Self::vk_mcp_url_config_arg()])
-    }
-
-    fn vk_mcp_url_config_arg() -> String {
-        let mcp_port = std::env::var("MCP_PORT")
-            .ok()
-            .filter(|value| value.parse::<u16>().is_ok())
-            .unwrap_or_else(|| "3002".to_string());
-
-        format!("mcp_servers.vk.url=\"http://127.0.0.1:{mcp_port}/mcp\"")
     }
 
     fn build_command_builder(&self) -> CommandBuilder {
         let mut builder = Self::base_command_builder();
+        builder = builder.extend_params(self.vk_mcp_cli());
         builder = builder.extend_params(["app-server"]);
         if self.oss.unwrap_or(false) {
             builder = builder.extend_params(["--oss"]);

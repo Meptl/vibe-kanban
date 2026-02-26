@@ -29,6 +29,7 @@ use crate::{
     executors::{
         AppendPrompt, AvailabilityInfo, ExecutorError, SpawnedChild, StandardCodingAgentExecutor,
         codex::client::LogWriter,
+        vk_mcp_port_from_env,
     },
     logs::{
         ActionType, FileChange, NormalizedEntry, NormalizedEntryError, NormalizedEntryType,
@@ -93,15 +94,6 @@ impl ClaudeCode {
             .replace('"', "\\\"")
     }
 
-    fn vk_mcp_command_config_arg() -> String {
-        let mcp_port = std::env::var("MCP_PORT")
-            .ok()
-            .filter(|value| value.parse::<u16>().is_ok())
-            .unwrap_or_else(|| "3002".to_string());
-
-        Self::vk_mcp_command_config_arg_with_port(&mcp_port)
-    }
-
     async fn build_command_builder(&self) -> CommandBuilder {
         // If base_command_override is provided and claude_code_router is also set, log a warning
         if self.cmd.base_command_override.is_some() && self.claude_code_router.is_some() {
@@ -133,7 +125,7 @@ impl ClaudeCode {
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model]);
         }
-        builder = builder.extend_params(["--mcp-config", &Self::vk_mcp_command_config_arg()]);
+        builder = builder.extend_params(self.vk_mcp_cli());
         builder = builder.extend_params([
             "--verbose",
             "--output-format=stream-json",
@@ -187,6 +179,16 @@ impl ClaudeCode {
 impl StandardCodingAgentExecutor for ClaudeCode {
     fn use_approvals(&mut self, approvals: Arc<dyn ExecutorApprovalService>) {
         self.approvals_service = Some(approvals);
+    }
+
+    fn vk_mcp_cli(&self) -> Vec<String> {
+        let Some(mcp_port) = vk_mcp_port_from_env() else {
+            return Vec::new();
+        };
+        vec![
+            "--mcp-config".to_string(),
+            Self::vk_mcp_command_config_arg_with_port(&mcp_port.to_string()),
+        ]
     }
 
     async fn spawn(

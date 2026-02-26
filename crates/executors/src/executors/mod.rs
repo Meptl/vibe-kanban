@@ -35,6 +35,12 @@ pub mod gemini;
 pub mod opencode;
 pub mod qwen;
 
+pub(crate) fn vk_mcp_port_from_env() -> Option<u16> {
+    std::env::var("MCP_PORT")
+        .ok()
+        .and_then(|value| value.parse::<u16>().ok())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 #[ts(use_ts_enum)]
@@ -193,6 +199,12 @@ impl AvailabilityInfo {
 #[enum_dispatch(CodingAgent)]
 pub trait StandardCodingAgentExecutor {
     fn use_approvals(&mut self, _approvals: Arc<dyn ExecutorApprovalService>) {}
+
+    /// Extra CLI args to wire Vibe Kanban MCP into this executor at runtime.
+    /// Default is no-op for executors that do not use CLI-based MCP injection.
+    fn vk_mcp_cli(&self) -> Vec<String> {
+        Vec::new()
+    }
 
     async fn spawn(
         &self,
