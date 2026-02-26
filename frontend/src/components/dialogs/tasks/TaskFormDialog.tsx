@@ -95,6 +95,7 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
     []
   );
   const [showDiscardWarning, setShowDiscardWarning] = useState(false);
+  const [closeSearchSignal, setCloseSearchSignal] = useState(0);
   const forceCreateOnlyRef = useRef(false);
 
   const { data: branches, isLoading: branchesLoading } =
@@ -341,6 +342,7 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
   // Dialog close handling
   const handleDialogClose = (open: boolean) => {
     if (open) return;
+    setCloseSearchSignal((prev) => prev + 1);
     if (hasUnsavedChanges()) {
       setShowDiscardWarning(true);
     } else {
@@ -438,6 +440,7 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
                     onCmdEnter={primaryAction}
                     onShiftCmdEnter={handleSubmitCreateOnly}
                     disableInternalScroll
+                    closeMenuSignal={closeSearchSignal}
                   />
                 </div>
               )}

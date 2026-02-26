@@ -38,6 +38,7 @@ interface PlainTextTagTextareaProps {
   rows?: number;
   maxRows?: number;
   disableInternalScroll?: boolean;
+  closeMenuSignal?: number;
 }
 
 type ActiveQuery = {
@@ -110,6 +111,7 @@ export function PlainTextTagTextarea({
   rows = 3,
   maxRows = 10,
   disableInternalScroll = false,
+  closeMenuSignal,
 }: PlainTextTagTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -164,6 +166,14 @@ export function PlainTextTagTextarea({
       el.scrollIntoView({ block: 'nearest' });
     }
   }, [isOpen, selectedIndex]);
+
+  useEffect(() => {
+    setIsOpen(false);
+    setActiveQuery(null);
+    setOptions([]);
+    setSelectedIndex(-1);
+    requestIdRef.current += 1;
+  }, [closeMenuSignal]);
 
   const updateQueryFromTextarea = useCallback(
     (target: HTMLTextAreaElement) => {
