@@ -46,10 +46,6 @@ type ActiveQuery = {
   end: number;
 };
 
-function toTaskMentionAlias(title: string) {
-  return title.trim().replace(/\s+/g, '_');
-}
-
 function getMenuPosition(textareaEl: HTMLTextAreaElement) {
   const rect = textareaEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight;
@@ -407,7 +403,6 @@ export function PlainTextTagTextarea({
                       {options.map((option, index) => {
                         if (option.type !== 'task' || !option.task) return null;
                         const task = option.task;
-                        const taskAlias = toTaskMentionAlias(task.title);
                         return (
                           <button
                             key={`task-${task.id}`}
@@ -428,7 +423,7 @@ export function PlainTextTagTextarea({
                           >
                             <div className="flex items-center gap-2 font-medium truncate">
                               <List className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                              @{taskAlias}
+                              @{task.title}
                             </div>
                           </button>
                         );

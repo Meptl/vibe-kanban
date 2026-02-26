@@ -5,10 +5,6 @@ interface FileSearchResult extends SearchResult {
   name: string;
 }
 
-function normalizeTaskSearchText(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '_');
-}
-
 export interface SearchResultItem {
   type: 'tag' | 'file' | 'task';
   tag?: Tag;
@@ -26,7 +22,6 @@ export async function searchTagsAndFiles(
   const fileMentionResults: SearchResultItem[] = [];
   const trimmedQuery = query.trim();
   const normalizedQuery = trimmedQuery.toLowerCase();
-  const normalizedTaskQuery = normalizeTaskSearchText(trimmedQuery);
 
   const tags = await tagsApi.list({
     search: trimmedQuery || null,
@@ -52,14 +47,9 @@ export async function searchTagsAndFiles(
     const matchingTasks =
       normalizedQuery.length === 0
         ? tasks
-        : tasks.filter((task) => {
-            const lowerTitle = task.title.toLowerCase();
-            const normalizedTitle = normalizeTaskSearchText(task.title);
-            return (
-              lowerTitle.includes(normalizedQuery) ||
-              normalizedTitle.includes(normalizedTaskQuery)
-            );
-          });
+        : tasks.filter((task) =>
+            task.title.toLowerCase().includes(normalizedQuery)
+          );
     taskResults.push(
       ...matchingTasks.map((task) => ({ type: 'task' as const, task }))
     );
