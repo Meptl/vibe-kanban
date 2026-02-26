@@ -4,7 +4,6 @@ import { cloneDeep, merge, isEqual } from 'lodash';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -55,9 +54,7 @@ export function GeneralSettings() {
   // Draft state management
   const [draft, setDraft] = useState(() => (config ? cloneDeep(config) : null));
   const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [branchPrefixError, setBranchPrefixError] = useState<string | null>(
     null
   );
@@ -137,22 +134,15 @@ export function GeneralSettings() {
     }
 
     const saveSnapshot = cloneDeep(draft);
-    const saveSeq = ++saveSeqRef.current;
+    ++saveSeqRef.current;
     const timer = window.setTimeout(async () => {
-      setSaving(true);
       setError(null);
-      setSuccess(false);
 
       try {
         const saved = await updateAndSaveConfig(saveSnapshot);
         if (!saved) {
           setError(t('settings.general.save.error'));
           return;
-        }
-
-        if (saveSeq === saveSeqRef.current) {
-          setSuccess(true);
-          setTimeout(() => setSuccess(false), 3000);
         }
 
         if (isEqual(latestDraftRef.current, saveSnapshot)) {
@@ -162,10 +152,6 @@ export function GeneralSettings() {
       } catch (err) {
         setError(t('settings.general.save.error'));
         console.error('Error saving config:', err);
-      } finally {
-        if (saveSeq === saveSeqRef.current) {
-          setSaving(false);
-        }
       }
     }, 400);
 
@@ -218,11 +204,8 @@ export function GeneralSettings() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.appearance.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.appearance.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -250,9 +233,6 @@ export function GeneralSettings() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              {t('settings.general.appearance.theme.helper')}
-            </p>
           </div>
 
           <div className="space-y-2">
@@ -280,19 +260,13 @@ export function GeneralSettings() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              {t('settings.general.appearance.language.helper')}
-            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.editor.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.editor.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -416,11 +390,8 @@ export function GeneralSettings() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.git.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.git.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -468,11 +439,8 @@ export function GeneralSettings() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.notifications.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.notifications.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center space-x-2">
@@ -538,9 +506,6 @@ export function GeneralSettings() {
                   <Volume2 className="h-4 w-4" />
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {t('settings.general.notifications.sound.fileHelper')}
-              </p>
             </div>
           )}
           <div className="flex items-center space-x-2">
@@ -613,11 +578,8 @@ export function GeneralSettings() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.taskTemplates.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.taskTemplates.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <TagManager />
@@ -625,11 +587,8 @@ export function GeneralSettings() {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.safety.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.safety.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -676,23 +635,10 @@ export function GeneralSettings() {
                     'Show warning before starting a new attempt from drag-and-drop',
                 })}
               </Label>
-              <p className="text-sm text-muted-foreground">
-                {t('settings.general.safety.newAttemptWarning.helper', {
-                  defaultValue:
-                    'When enabled, moving a task with existing attempts to In Progress asks for confirmation before creating another attempt.',
-                })}
-              </p>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {saving && !success && (
-        <div className="flex items-center text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          {t('settings.general.save.button')}
-        </div>
-      )}
     </div>
   );
 }

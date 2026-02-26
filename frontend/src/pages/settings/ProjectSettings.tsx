@@ -302,11 +302,8 @@ export function ProjectSettings() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.projects.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.projects.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -336,9 +333,6 @@ export function ProjectSettings() {
                 )}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              {t('settings.projects.selector.helper')}
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -383,9 +377,6 @@ export function ProjectSettings() {
                   placeholder={t('settings.projects.general.name.placeholder')}
                   required
                 />
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.projects.general.name.helper')}
-                </p>
               </div>
 
               <div className="space-y-2">
@@ -423,9 +414,6 @@ export function ProjectSettings() {
                     <Folder className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {t('settings.projects.general.repoPath.helper')}
-                </p>
               </div>
             </CardContent>
           </Card>

@@ -303,9 +303,6 @@ export function McpSettings() {
                     ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">
-              {t('settings.mcp.labels.agentHelper')}
-            </p>
           </div>
 
           {mcpError && mcpError.includes('does not support MCP') ? (

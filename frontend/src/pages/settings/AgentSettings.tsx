@@ -391,11 +391,8 @@ export function AgentSettings() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle>{t('settings.general.taskExecution.title')}</CardTitle>
-          <CardDescription>
-            {t('settings.general.taskExecution.description')}
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -505,9 +502,6 @@ export function AgentSettings() {
               })()}
             </div>
             <AgentAvailabilityIndicator availability={agentAvailability} />
-            <p className="text-sm text-muted-foreground">
-              {t('settings.general.taskExecution.executor.helper')}
-            </p>
           </div>
         </CardContent>
       </Card>

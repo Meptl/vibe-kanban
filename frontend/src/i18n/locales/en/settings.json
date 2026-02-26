@@ -28,13 +28,11 @@
         "description": "Customize how the application looks and feels.",
         "theme": {
           "label": "Theme",
-          "placeholder": "Select theme",
-          "helper": "Choose your preferred color scheme."
+          "placeholder": "Select theme"
         },
         "language": {
           "label": "Language",
-          "placeholder": "Select language",
-          "helper": "Choose your preferred language. Browser Default follows your system language."
+          "placeholder": "Select language"
         }
       },
       "taskExecution": {
@@ -42,8 +40,7 @@
         "description": "Choose the default coding agent for tasks.",
         "executor": {
           "label": "Default Agent Configuration",
-          "placeholder": "Select profile",
-          "helper": "Choose the default agent configuration to use when creating a task attempt."
+          "placeholder": "Select profile"
         },
         "variant": "DEFAULT",
         "defaultLabel": "Default"
@@ -152,8 +149,7 @@
           "label": "Sound Notifications",
           "helper": "Play a sound when task attempts finish running.",
           "fileLabel": "Sound",
-          "filePlaceholder": "Select sound",
-          "fileHelper": "Choose the sound to play when tasks complete. Click the volume button to preview."
+          "filePlaceholder": "Select sound"
         },
         "badge": {
           "label": "Badge Notifications",
@@ -280,7 +276,6 @@
       "labels": {
         "agent": "Agent",
         "agentPlaceholder": "Select executor",
-        "agentHelper": "Choose which agent to configure MCP servers for.",
         "serverConfig": "Server Configuration (JSON)",
         "popularServers": "Popular servers",
         "serverHelper": "Click a card to insert that MCP Server into the JSON above.",
@@ -316,7 +311,6 @@
       "selector": {
         "label": "Select Project",
         "placeholder": "Choose a project to configure",
-        "helper": "Select a project to view and edit its configuration.",
         "noProjects": "No projects available"
       },
       "general": {
@@ -324,13 +318,11 @@
         "description": "Configure basic project information.",
         "name": {
           "label": "Project Name",
-          "placeholder": "Enter project name",
-          "helper": "A display name for this project."
+          "placeholder": "Enter project name"
         },
         "repoPath": {
           "label": "Git Repository Path",
-          "placeholder": "/path/to/your/existing/repo",
-          "helper": "The absolute path to your git repository on disk."
+          "placeholder": "/path/to/your/existing/repo"
         }
       },
       "scripts": {
