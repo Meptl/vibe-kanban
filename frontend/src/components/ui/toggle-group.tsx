@@ -10,7 +10,7 @@ const toggleGroupItemVariants = cva(
   {
     variants: {
       active: {
-        true: 'bg-background text-foreground shadow-sm font-semibold',
+        true: 'bg-background text-foreground shadow-sm font-semibold hover:bg-accent hover:text-accent-foreground',
         false: 'text-muted-foreground/60 hover:text-muted-foreground',
       },
       size: {
