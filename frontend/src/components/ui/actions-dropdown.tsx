@@ -30,6 +30,9 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
 
   const hasAttemptActions = Boolean(attempt);
   const hasTaskActions = Boolean(task);
+  const stopEventPropagation = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -101,7 +104,13 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
         <DropdownMenuContent align="end">
           {hasAttemptActions && (
             <>
-              <DropdownMenuLabel>{t('actionsMenu.attempt')}</DropdownMenuLabel>
+              <DropdownMenuLabel
+                onPointerDown={stopEventPropagation}
+                onMouseDown={stopEventPropagation}
+                onClick={stopEventPropagation}
+              >
+                {t('actionsMenu.attempt')}
+              </DropdownMenuLabel>
               <DropdownMenuItem
                 disabled={!attempt?.id}
                 onClick={handleOpenInEditor}
@@ -123,12 +132,25 @@ export function ActionsDropdown({ task, attempt }: ActionsDropdownProps) {
               >
                 {t('actionsMenu.gitActions')}
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              {hasTaskActions && (
+                <DropdownMenuSeparator
+                  onPointerDown={stopEventPropagation}
+                  onMouseDown={stopEventPropagation}
+                  onClick={stopEventPropagation}
+                />
+              )}
             </>
           )}
 
           {hasTaskActions && (
             <>
+              <DropdownMenuLabel
+                onPointerDown={stopEventPropagation}
+                onMouseDown={stopEventPropagation}
+                onClick={stopEventPropagation}
+              >
+                {t('actionsMenu.task')}
+              </DropdownMenuLabel>
               <DropdownMenuItem disabled={!projectId} onClick={handleEdit}>
                 {t('common:buttons.edit')}
               </DropdownMenuItem>
