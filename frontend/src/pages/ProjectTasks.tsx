@@ -1033,10 +1033,7 @@ export function ProjectTasks() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words hover:underline"
-              onClick={() =>
-                navigateWithSearch(paths.task(projectId!, selectedTask.id))
-              }
+              className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words"
             >
               {selectedTask.title || 'Task'}
             </button>
