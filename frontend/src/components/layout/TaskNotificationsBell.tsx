@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
+  DropdownMenuCheckboxItem,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -41,11 +42,25 @@ function outcomeLabel(outcome: 'merged' | 'failed' | 'completed') {
 
 export function TaskNotificationsBell() {
   const navigate = useNavigate();
-  const { config } = useUserSystem();
+  const { config, updateAndSaveConfig } = useUserSystem();
   const { notifications, clearTaskNotifications, clearAllNotifications } =
     useTaskNotifications();
 
   const visibleNotifications = useMemo(() => notifications, [notifications]);
+  const notificationSettings = config?.notifications;
+
+  const updateNotificationSetting = (
+    key: 'badge_enabled' | 'toast_enabled' | 'system_enabled',
+    value: boolean
+  ) => {
+    if (!notificationSettings) return;
+    void updateAndSaveConfig({
+      notifications: {
+        ...notificationSettings,
+        [key]: value,
+      },
+    });
+  };
 
   return (
     <DropdownMenu>
@@ -112,6 +127,38 @@ export function TaskNotificationsBell() {
             </DropdownMenuItem>
           ))
         )}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="px-2 py-1 text-xs text-muted-foreground">
+          Notification Settings
+        </DropdownMenuLabel>
+        <DropdownMenuCheckboxItem
+          checked={notificationSettings?.badge_enabled ?? false}
+          disabled={!notificationSettings}
+          onCheckedChange={(checked) => {
+            updateNotificationSetting('badge_enabled', checked === true);
+          }}
+        >
+          Badge Notifications
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={notificationSettings?.toast_enabled ?? false}
+          disabled={!notificationSettings}
+          onCheckedChange={(checked) => {
+            updateNotificationSetting('toast_enabled', checked === true);
+          }}
+        >
+          Toast Notifications
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={notificationSettings?.system_enabled ?? false}
+          disabled={!notificationSettings}
+          onCheckedChange={(checked) => {
+            updateNotificationSetting('system_enabled', checked === true);
+          }}
+        >
+          System Notifications
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
