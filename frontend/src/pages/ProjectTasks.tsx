@@ -1031,12 +1031,9 @@ export function ProjectTasks() {
       >
         <div className="mx-auto w-full">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words"
-            >
+            <div className="min-w-0 max-w-full text-base md:text-lg font-semibold text-left whitespace-normal break-words">
               {selectedTask.title || 'Task'}
-            </button>
+            </div>
           </div>
         </div>
       </NewCardHeader>
