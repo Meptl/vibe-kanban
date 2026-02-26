@@ -119,6 +119,9 @@ importers:
       framer-motion:
         specifier: ^12.23.24
         version: 12.23.24(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      fzf:
+        specifier: ^0.5.2
+        version: 0.5.2
       i18next:
         specifier: ^25.5.2
         version: 25.6.0(typescript@5.9.2)
@@ -2263,6 +2266,9 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+
+  fzf@0.5.2:
+    resolution: {integrity: sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==}
 
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
@@ -5414,6 +5420,8 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
+
+  fzf@0.5.2: {}
 
   gensync@1.0.0-beta.2: {}
 

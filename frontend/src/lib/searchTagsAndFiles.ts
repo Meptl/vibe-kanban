@@ -1,8 +1,90 @@
 import { projectsApi, tagsApi, tasksApi } from '@/lib/api';
+import { Fzf } from 'fzf';
 import type { SearchResult, Tag, TaskWithAttemptStatus } from 'shared/types';
 
 interface FileSearchResult extends SearchResult {
   name: string;
+}
+
+function normalizeTaskSearchText(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function isSubsequenceMatch(haystack: string, needle: string): boolean {
+  if (needle.length === 0) return true;
+  let queryIndex = 0;
+  const haystackLower = haystack.toLowerCase();
+  const needleLower = needle.toLowerCase();
+
+  for (let i = 0; i < haystackLower.length; i += 1) {
+    if (haystackLower[i] === needleLower[queryIndex]) {
+      queryIndex += 1;
+      if (queryIndex === needleLower.length) return true;
+    }
+  }
+
+  return false;
+}
+
+function rankTagsWithFzf(tags: Tag[], query: string): Tag[] {
+  if (tags.length === 0) return tags;
+  if (query.length === 0) return tags;
+  const filteredTags = tags.filter((tag) =>
+    isSubsequenceMatch(tag.tag_name, query)
+  );
+  if (filteredTags.length === 0) return [];
+
+  const fzf = new Fzf(filteredTags, {
+    selector: (tag) => tag.tag_name,
+    forward: false,
+  });
+
+  return fzf.find(query).map((result) => result.item);
+}
+
+function rankFilesWithFzf(
+  files: FileSearchResult[],
+  query: string
+): FileSearchResult[] {
+  if (files.length === 0) return files;
+  if (query.length === 0) return files;
+  const filteredFiles = files.filter(
+    (file) =>
+      isSubsequenceMatch(file.name, query) ||
+      isSubsequenceMatch(file.path, query)
+  );
+  if (filteredFiles.length === 0) return [];
+
+  const fzf = new Fzf(filteredFiles, {
+    selector: (file) => `${file.name}\n${file.path}`,
+    forward: false,
+  });
+
+  return fzf.find(query).map((result) => result.item);
+}
+
+function rankTasksWithFzf(tasks: TaskWithAttemptStatus[], query: string) {
+  if (tasks.length === 0) return tasks;
+  if (query.length === 0) return tasks;
+  const filteredTasks = tasks.filter((task) => {
+    const taskAlias = normalizeTaskSearchText(task.title);
+    return (
+      isSubsequenceMatch(task.title, query) ||
+      isSubsequenceMatch(taskAlias, query) ||
+      isSubsequenceMatch(task.id, query)
+    );
+  });
+  if (filteredTasks.length === 0) return [];
+
+  const fzf = new Fzf(filteredTasks, {
+    selector: (task) => {
+      const taskAlias = normalizeTaskSearchText(task.title);
+      return `${task.title}\n${taskAlias}\n${task.id}`;
+    },
+    forward: false,
+  });
+
+  return fzf.find(query).map((result) => result.item);
 }
 
 export interface SearchResultItem {
@@ -17,18 +99,15 @@ export async function searchTagsAndFiles(
   projectId?: string,
   options?: { includeTasks?: boolean }
 ): Promise<SearchResultItem[]> {
-  const tagResults: SearchResultItem[] = [];
-  const taskResults: SearchResultItem[] = [];
-  const fileMentionResults: SearchResultItem[] = [];
   const trimmedQuery = query.trim();
-  const normalizedQuery = trimmedQuery.toLowerCase();
 
   const tags = await tagsApi.list({
-    search: trimmedQuery || null,
+    search: null,
     project_id: projectId ?? null,
     include_global: projectId ? true : null,
   });
-  tagResults.push(...tags.map((tag) => ({ type: 'tag' as const, tag })));
+  const matchedTags = rankTagsWithFzf(tags, trimmedQuery);
+  const tagResults = matchedTags.map((tag) => ({ type: 'tag' as const, tag }));
 
   // Fetch files (if projectId is available and query has content)
   if (projectId && trimmedQuery.length > 0) {
@@ -37,23 +116,35 @@ export async function searchTagsAndFiles(
       ...item,
       name: item.path.split('/').pop() || item.path,
     }));
-    fileMentionResults.push(
-      ...fileSearchResults.map((file) => ({ type: 'file' as const, file }))
-    );
+    const matchedFiles = rankFilesWithFzf(fileSearchResults, trimmedQuery);
+    const fileMentionResults = matchedFiles.map((file) => ({
+      type: 'file' as const,
+      file,
+    }));
+
+    if (options?.includeTasks) {
+      const tasks = await tasksApi.list(projectId);
+      const matchedTasks = rankTasksWithFzf(tasks, trimmedQuery);
+      const taskResults = matchedTasks.map((task) => ({
+        type: 'task' as const,
+        task,
+      }));
+
+      return [...tagResults, ...taskResults, ...fileMentionResults];
+    }
+
+    return [...tagResults, ...fileMentionResults];
   }
 
   if (projectId && options?.includeTasks) {
     const tasks = await tasksApi.list(projectId);
-    const matchingTasks =
-      normalizedQuery.length === 0
-        ? tasks
-        : tasks.filter((task) =>
-            task.title.toLowerCase().includes(normalizedQuery)
-          );
-    taskResults.push(
-      ...matchingTasks.map((task) => ({ type: 'task' as const, task }))
-    );
+    const matchedTasks = rankTasksWithFzf(tasks, trimmedQuery);
+    const taskResults = matchedTasks.map((task) => ({
+      type: 'task' as const,
+      task,
+    }));
+    return [...tagResults, ...taskResults];
   }
 
-  return [...tagResults, ...taskResults, ...fileMentionResults];
+  return tagResults;
 }
