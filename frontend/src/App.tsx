@@ -11,7 +11,6 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { Projects } from '@/pages/Projects';
 import { ProjectTasks } from '@/pages/ProjectTasks';
-import { FullAttemptLogsPage } from '@/pages/FullAttemptLogs';
 import { NormalLayout } from '@/components/layout/NormalLayout';
 
 import {
@@ -118,12 +117,6 @@ function AppContent() {
           <TaskNotificationsProvider>
             <div className="h-screen flex flex-col bg-background">
               <Routes>
-                {/* VS Code full-page logs route (outside NormalLayout for minimal UI) */}
-                <Route
-                  path="/projects/:projectId/tasks/:taskId/attempts/:attemptId/full"
-                  element={<FullAttemptLogsPage />}
-                />
-
                 <Route element={<NormalLayout />}>
                   <Route path="/" element={<Projects />} />
                   <Route path="/projects" element={<Projects />} />
