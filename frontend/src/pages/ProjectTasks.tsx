@@ -776,6 +776,51 @@ export function ProjectTasks() {
           existingAttempts = await attemptsApi.getAll(task.id);
         }
 
+        if (existingAttempts.length > 0 && config.show_new_attempt_drag_warning) {
+          let dontShowAgain = false;
+          const confirmResult = await ConfirmDialog.show({
+            title: t('newAttemptWarning.title', {
+              defaultValue: 'Start a new attempt?',
+            }),
+            message: t('newAttemptWarning.message', {
+              defaultValue:
+                "This task already has an attempt. If you're looking to continue this conversation, do so in the chat window.",
+            }),
+            confirmText: t('newAttemptWarning.confirmText', {
+              defaultValue: 'Start New Attempt',
+            }),
+            cancelText: t('newAttemptWarning.cancelText', {
+              defaultValue: 'Cancel',
+            }),
+            variant: 'destructive',
+            checkboxLabel: t('newAttemptWarning.dontShowAgain', {
+              defaultValue: "Don't show again",
+            }),
+            checkboxDescription: t(
+              'newAttemptWarning.dontShowAgainDescription',
+              {
+                defaultValue:
+                  'You can change this later in Settings > General > Safety & Disclaimers.',
+              }
+            ),
+            onCheckboxChange: (checked) => {
+              dontShowAgain = checked;
+            },
+          }).finally(() => {
+            ConfirmDialog.hide();
+          });
+
+          if (confirmResult !== 'confirmed') {
+            return;
+          }
+
+          if (dontShowAgain) {
+            void updateAndSaveConfig({
+              show_new_attempt_drag_warning: false,
+            });
+          }
+        }
+
         const latestAttempt =
           existingAttempts.length === 0
             ? null
@@ -827,7 +872,15 @@ export function ProjectTasks() {
         );
       }
     },
-    [branches, config?.executor_profile, projectId, tasksById]
+    [
+      branches,
+      config?.executor_profile,
+      config?.show_new_attempt_drag_warning,
+      projectId,
+      t,
+      tasksById,
+      updateAndSaveConfig,
+    ]
   );
 
   const clearDropPreview = useCallback(() => {

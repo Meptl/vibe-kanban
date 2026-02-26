@@ -7,9 +7,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { AlertTriangle, Info, CheckCircle, XCircle } from 'lucide-react';
 import { defineModal, type ConfirmResult } from '@/lib/modals';
+import { useEffect, useState } from 'react';
 
 export interface ConfirmDialogProps {
   title: string;
@@ -18,6 +21,10 @@ export interface ConfirmDialogProps {
   cancelText?: string;
   variant?: 'default' | 'destructive' | 'info' | 'success';
   icon?: boolean;
+  checkboxLabel?: string;
+  checkboxDescription?: string;
+  checkboxDefaultChecked?: boolean;
+  onCheckboxChange?: (checked: boolean) => void;
 }
 
 const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
@@ -29,7 +36,17 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
     cancelText = 'Cancel',
     variant = 'default',
     icon = true,
+    checkboxLabel,
+    checkboxDescription,
+    checkboxDefaultChecked = false,
+    onCheckboxChange,
   } = props;
+  const [isChecked, setIsChecked] = useState(checkboxDefaultChecked);
+
+  useEffect(() => {
+    if (!modal.visible) return;
+    setIsChecked(checkboxDefaultChecked);
+  }, [checkboxDefaultChecked, modal.visible]);
 
   const handleConfirm = () => {
     modal.resolve('confirmed' as ConfirmResult);
@@ -58,6 +75,8 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
     return variant === 'destructive' ? 'destructive' : 'default';
   };
 
+  const hasCheckbox = Boolean(checkboxLabel);
+
   return (
     <Dialog open={modal.visible} onOpenChange={handleCancel}>
       <DialogContent className="sm:max-w-[425px]">
@@ -70,6 +89,32 @@ const ConfirmDialogImpl = NiceModal.create<ConfirmDialogProps>((props) => {
             {message}
           </DialogDescription>
         </DialogHeader>
+        {hasCheckbox && (
+          <div className="flex items-start space-x-2">
+            <Checkbox
+              id="confirm-dialog-checkbox"
+              checked={isChecked}
+              onCheckedChange={(checked) => {
+                const nextChecked = checked === true;
+                setIsChecked(nextChecked);
+                onCheckboxChange?.(nextChecked);
+              }}
+            />
+            <div className="space-y-1">
+              <Label
+                htmlFor="confirm-dialog-checkbox"
+                className="cursor-pointer text-sm font-medium"
+              >
+                {checkboxLabel}
+              </Label>
+              {checkboxDescription && (
+                <p className="text-xs text-muted-foreground">
+                  {checkboxDescription}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={handleCancel}>
             {cancelText}

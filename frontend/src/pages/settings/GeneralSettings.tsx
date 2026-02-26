@@ -658,6 +658,32 @@ export function GeneralSettings() {
               {t('settings.general.safety.onboarding.button')}
             </Button>
           </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="show-new-attempt-drag-warning"
+              checked={draft?.show_new_attempt_drag_warning}
+              onCheckedChange={(checked: boolean) =>
+                updateDraft({ show_new_attempt_drag_warning: checked })
+              }
+            />
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="show-new-attempt-drag-warning"
+                className="cursor-pointer"
+              >
+                {t('settings.general.safety.newAttemptWarning.label', {
+                  defaultValue:
+                    'Show warning before starting a new attempt from drag-and-drop',
+                })}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t('settings.general.safety.newAttemptWarning.helper', {
+                  defaultValue:
+                    'When enabled, moving a task with existing attempts to In Progress asks for confirmation before creating another attempt.',
+                })}
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

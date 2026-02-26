@@ -14,6 +14,10 @@ fn default_toast_enabled() -> bool {
     true
 }
 
+fn default_show_new_attempt_drag_warning() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct NotificationConfig {
     pub sound_enabled: bool,
@@ -50,6 +54,8 @@ pub struct Config {
     pub workspace_dir: Option<String>,
     pub last_app_version: Option<String>,
     pub show_release_notes: bool,
+    #[serde(default = "default_show_new_attempt_drag_warning")]
+    pub show_new_attempt_drag_warning: bool,
     #[serde(default)]
     pub language: UiLanguage,
     #[serde(default = "super::default_git_branch_prefix")]
@@ -77,6 +83,7 @@ impl Config {
             workspace_dir: old_config.workspace_dir,
             last_app_version: old_config.last_app_version,
             show_release_notes: old_config.show_release_notes,
+            show_new_attempt_drag_warning: default_show_new_attempt_drag_warning(),
             language: old_config.language,
             git_branch_prefix: old_config.git_branch_prefix,
             showcases: old_config.showcases,
@@ -123,6 +130,7 @@ impl Default for Config {
             workspace_dir: None,
             last_app_version: None,
             show_release_notes: false,
+            show_new_attempt_drag_warning: default_show_new_attempt_drag_warning(),
             language: UiLanguage::default(),
             git_branch_prefix: super::default_git_branch_prefix(),
             showcases: ShowcaseState::default(),
