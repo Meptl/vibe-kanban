@@ -59,7 +59,8 @@ export const AttemptHeaderActions = ({
                   <ToggleGroupItem
                     value="preview"
                     aria-label="Preview"
-                    active={mode === 'preview'}
+                    active={mode !== 'preview'}
+                    disabled={mode === 'preview'}
                   >
                     <Eye className="h-4 w-4" />
                   </ToggleGroupItem>
@@ -74,7 +75,8 @@ export const AttemptHeaderActions = ({
                   <ToggleGroupItem
                     value="diffs"
                     aria-label="Diffs"
-                    active={mode === 'diffs'}
+                    active={mode !== 'diffs'}
+                    disabled={mode === 'diffs'}
                   >
                     <FileDiff className="h-4 w-4" />
                   </ToggleGroupItem>
