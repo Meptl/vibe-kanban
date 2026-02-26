@@ -385,6 +385,7 @@ export function ProjectTasks() {
     },
     {
       scope: Scope.KANBAN,
+      enableOnFormTags: true,
     }
   );
 
