@@ -1126,10 +1126,10 @@ impl ContainerService for LocalContainerService {
         };
 
         if let Some(merge) = &latest_merge
-            && let Some(commit) = merge.merge_commit()
             && self.is_container_clean(task_attempt).await?
             && !is_ahead
         {
+            let commit = merge.merge_commit();
             let wrapper =
                 self.create_merged_diff_stream(&project_repo_path, &commit, stats_only)?;
             return Ok(Box::pin(wrapper));

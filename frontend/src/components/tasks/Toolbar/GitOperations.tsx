@@ -14,12 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx';
 import { useMemo, useState } from 'react';
-import type {
-  BranchStatus,
-  Merge,
-  GitBranch,
-  TaskAttempt,
-} from 'shared/types';
+import type { BranchStatus, GitBranch, TaskAttempt } from 'shared/types';
 import { ChangeTargetBranchDialog } from '@/components/dialogs/tasks/ChangeTargetBranchDialog';
 import { useTranslation } from 'react-i18next';
 import { useGitOperations } from '@/hooks/useGitOperations';
@@ -93,23 +88,14 @@ function GitOperations({
         isCurrentHeadMerged: false,
       };
 
-    const merges = branchStatus.merges.filter(
-      (m: Merge) =>
-        m.type === 'direct' ||
-        (m.type === 'pr' && m.pr_info.status === 'merged')
-    );
-
     const mergedCommitShas = new Set(
-      merges
-        .map((m) => {
-          if (m.type === 'direct') return m.merge_commit;
-          return m.pr_info.merge_commit_sha;
-        })
+      branchStatus.merges
+        .map((m) => m.merge_commit)
         .filter((sha): sha is string => Boolean(sha))
     );
 
     return {
-      hasMergedHistory: merges.length > 0,
+      hasMergedHistory: branchStatus.merges.length > 0,
       isCurrentHeadMerged: Boolean(
         branchStatus.head_oid && mergedCommitShas.has(branchStatus.head_oid)
       ),

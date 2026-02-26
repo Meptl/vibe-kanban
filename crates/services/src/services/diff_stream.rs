@@ -394,11 +394,13 @@ fn process_file_changes(
 ) -> Result<Vec<LogMsg>, DiffStreamError> {
     let path_filter: Vec<&str> = changed_paths.iter().map(|s| s.as_str()).collect();
 
-    let effective_base = resolve_base_commit(git_service, worktree_path, base_commit, target_branch)
-        .unwrap_or_else(|err| {
-            tracing::warn!("Failed to refresh diff base commit during live update: {err}");
-            base_commit.clone()
-        });
+    let effective_base =
+        resolve_base_commit(git_service, worktree_path, base_commit, target_branch).unwrap_or_else(
+            |err| {
+                tracing::warn!("Failed to refresh diff base commit during live update: {err}");
+                base_commit.clone()
+            },
+        );
 
     let current_diffs = git_service.get_diffs(
         DiffTarget::Worktree {
@@ -450,9 +452,5 @@ fn resolve_base_commit(
     };
 
     let head = git_service.get_head_info(worktree_path)?;
-    Ok(git_service.get_base_commit(
-        worktree_path,
-        &head.branch,
-        target_branch,
-    )?)
+    Ok(git_service.get_base_commit(worktree_path, &head.branch, target_branch)?)
 }

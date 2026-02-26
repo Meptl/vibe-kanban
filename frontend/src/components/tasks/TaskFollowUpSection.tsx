@@ -291,16 +291,6 @@ export function TaskFollowUpSection({
       return false;
     }
 
-    // Check if PR is merged - if so, block follow-ups
-    if (branchStatus?.merges) {
-      const mergedPR = branchStatus.merges.find(
-        (m) => m.type === 'pr' && m.pr_info.status === 'merged'
-      );
-      if (mergedPR) {
-        return false;
-      }
-    }
-
     if (isRetryActive) return false; // disable typing while retry editor is active
     if (hasPendingApproval) return false; // disable typing during approval
     // Note: isQueued no longer blocks typing - editing auto-cancels the queue
@@ -309,7 +299,6 @@ export function TaskFollowUpSection({
     selectedAttemptId,
     processes.length,
     isSendingFollowUp,
-    branchStatus?.merges,
     isRetryActive,
     hasPendingApproval,
   ]);

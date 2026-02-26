@@ -17,7 +17,7 @@ use axum::{
 };
 use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessRunReason, ExecutionProcessStatus},
-    merge::{Merge, MergeStatus, PrMerge, PullRequestInfo},
+    merge::Merge,
     project::{Project, ProjectError},
     task::{Task, TaskRelationships, TaskStatus},
     task_attempt::{CreateTaskAttempt, TaskAttempt, TaskAttemptError},
@@ -185,8 +185,9 @@ pub async fn get_task_attempt_diff(
         .map(|(ahead, _)| ahead > 0)
         .unwrap_or(false);
 
-    let diffs = if let Some(merge) = &latest_merge
-        && let Some(commit) = merge.merge_commit()
+    let latest_merge_commit = latest_merge.as_ref().map(Merge::merge_commit);
+
+    let diffs = if let Some(commit) = latest_merge_commit
         && deployment
             .container()
             .is_container_clean(&task_attempt)
@@ -599,7 +600,7 @@ pub async fn merge_task_attempt(
         &commit_message,
     )?;
 
-    Merge::create_direct(
+    Merge::create(
         pool,
         task_attempt.id,
         &ctx.task_attempt.target_branch,
@@ -785,22 +786,7 @@ pub async fn get_task_attempt_branch_status(
     };
     // Fetch merges for this task attempt and add to branch status
     let merges = Merge::find_by_task_attempt_id(pool, task_attempt.id).await?;
-    let (remote_ahead, remote_behind) = if let Some(Merge::Pr(PrMerge {
-        pr_info: PullRequestInfo {
-            status: MergeStatus::Open,
-            ..
-        },
-        ..
-    })) = merges.first()
-    {
-        // check remote status if the attempt has an open PR
-        let (remote_commits_ahead, remote_commits_behind) = deployment
-            .git()
-            .get_remote_branch_status(&ctx.project.git_repo_path, &task_attempt.branch, None)?;
-        (Some(remote_commits_ahead), Some(remote_commits_behind))
-    } else {
-        (None, None)
-    };
+    let (remote_ahead, remote_behind) = (None, None);
 
     let branch_status = BranchStatus {
         commits_ahead,
@@ -950,15 +936,6 @@ pub async fn rename_branch(
     if deployment.git().is_rebase_in_progress(worktree_path)? {
         return Ok(ResponseJson(ApiResponse::error(
             "Cannot rename branch while rebase is in progress. Please complete or abort the rebase first.",
-        )));
-    }
-
-    if let Some(merge) = Merge::find_latest_by_task_attempt_id(pool, task_attempt.id).await?
-        && let Merge::Pr(pr_merge) = merge
-        && matches!(pr_merge.pr_info.status, MergeStatus::Open)
-    {
-        return Ok(ResponseJson(ApiResponse::error(
-            "Cannot rename branch with an open pull request. Please close the PR first or create a new attempt.",
         )));
     }
 
