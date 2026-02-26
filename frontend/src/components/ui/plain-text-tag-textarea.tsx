@@ -114,7 +114,6 @@ export function PlainTextTagTextarea({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const itemRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const requestIdRef = useRef(0);
-  const skipNextEscapeKeyUpRef = useRef(false);
 
   const [activeQuery, setActiveQuery] = useState<ActiveQuery | null>(null);
   const [options, setOptions] = useState<SearchResultItem[]>([]);
@@ -247,7 +246,6 @@ export function PlainTextTagTextarea({
       if ((isOpen || activeQuery) && e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        skipNextEscapeKeyUpRef.current = true;
         setIsOpen(false);
         setActiveQuery(null);
         setOptions([]);
@@ -297,14 +295,6 @@ export function PlainTextTagTextarea({
     ]
   );
 
-  const handleKeyUp = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape' && skipNextEscapeKeyUpRef.current) {
-      skipNextEscapeKeyUpRef.current = false;
-      return;
-    }
-    updateQueryFromTextarea(e.currentTarget);
-  }, [updateQueryFromTextarea]);
-
   const handleSelect = useCallback(
     (index: number) => {
       const option = options[index];
@@ -336,7 +326,6 @@ export function PlainTextTagTextarea({
         onPaste={handlePaste}
         onKeyDown={handleKeyDown}
         onClick={(e) => updateQueryFromTextarea(e.currentTarget)}
-        onKeyUp={handleKeyUp}
         onSelect={(e) => updateQueryFromTextarea(e.currentTarget)}
         placeholder={placeholder}
         disabled={disabled}
