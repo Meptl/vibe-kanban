@@ -30,7 +30,7 @@ env:
 
 jobs:
   bump-version:
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     outputs:
       new_tag: ${{ steps.version.outputs.new_tag }}
       new_version: ${{ steps.version.outputs.new_version }}
@@ -50,7 +50,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ssh-key: ${{ secrets.DEPLOY_KEY }}
 
       - name: setup node
         uses: ./.github/actions/setup-node
@@ -119,10 +118,9 @@ jobs:
 
   build-frontend:
     needs: bump-version
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     env:
       VITE_PUBLIC_REACT_VIRTUOSO_LICENSE_KEY: ${{ secrets.PUBLIC_REACT_VIRTUOSO_LICENSE_KEY }}
-      VITE_VK_SHARED_API_BASE: ${{ secrets.VK_SHARED_API_BASE }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -159,15 +157,15 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest-m
+            os: ubuntu-latest
             container: &zigbuild_container ghcr.io/rust-cross/cargo-zigbuild@sha256:af1bc2b869c5d76c1300f7a4685c2f1793d068e6e895c9f5c399b517b31a731e
             name: linux-x64
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest-m
+            os: ubuntu-latest
             name: linux-arm64
             container: *zigbuild_container
           - target: x86_64-pc-windows-msvc
-            os: windows-latest-l
+            os: windows-latest
             name: windows-x64
           # Intel-only runner; last supported x86_64 image (EOL Aug 2027)
           - target: x86_64-apple-darwin
@@ -177,7 +175,7 @@ jobs:
             os: macos-14
             name: macos-arm64
           - target: aarch64-pc-windows-msvc
-            os: windows-latest-l
+            os: windows-latest
             name: windows-arm64
     steps:
       - uses: actions/checkout@v4
@@ -219,8 +217,6 @@ jobs:
           cargo zigbuild --release --target ${{ matrix.target }} -p server
           cargo zigbuild --release --target ${{ matrix.target }} --bin mcp_task_server
           cargo zigbuild --release --target ${{ matrix.target }} -p review
-        env:
-          VK_SHARED_API_BASE: ${{ secrets.VK_SHARED_API_BASE }}
 
       - name: Build backend (non-Linux)
         if: runner.os != 'Linux'
@@ -228,15 +224,13 @@ jobs:
           cargo build --release --target ${{ matrix.target }} -p server
           cargo build --release --target ${{ matrix.target }} --bin mcp_task_server
           cargo build --release --target ${{ matrix.target }} -p review
-        env:
-          VK_SHARED_API_BASE: ${{ secrets.VK_SHARED_API_BASE }}
 
       - name: Prepare binaries (non-macOS)
         if: runner.os != 'macOS'
         shell: bash
         run: |
           mkdir -p dist
-          if [[ "${{ matrix.os }}" == "windows-latest-l" ]]; then
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             cp target/${{ matrix.target }}/release/server.exe dist/vibe-kanban-${{ matrix.name }}.exe
             cp target/${{ matrix.target }}/release/mcp_task_server.exe dist/vibe-kanban-mcp-${{ matrix.name }}.exe
             cp target/${{ matrix.target }}/release/review.exe dist/vibe-kanban-review-${{ matrix.name }}.exe
@@ -248,18 +242,18 @@ jobs:
 
       # Code signing for macOS only
       - name: Prepare Apple certificate (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: |
           echo "${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}" | base64 --decode > certificate.p12
 
       - name: Write API Key to file
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APP_STORE_API_KEY != ''
         env:
           API_KEY: ${{ secrets.APP_STORE_API_KEY }}
         run: echo $API_KEY > app_store_key.json
 
       - name: Sign main binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         uses: indygreg/apple-code-sign-action@v1
         with:
           input_path: target/${{ matrix.target }}/release/server
@@ -270,11 +264,11 @@ jobs:
           sign_args: "--code-signature-flags=runtime"
 
       - name: Package main binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: zip vibe-kanban.zip vibe-kanban
 
       - name: Notarize signed binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APP_STORE_API_KEY != ''
         uses: indygreg/apple-code-sign-action@v1
         continue-on-error: true
         with:
@@ -284,7 +278,7 @@ jobs:
           app_store_connect_api_key_json_file: app_store_key.json
 
       - name: Sign MCP binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         uses: indygreg/apple-code-sign-action@v1
         with:
           input_path: target/${{ matrix.target }}/release/mcp_task_server
@@ -295,11 +289,11 @@ jobs:
           sign_args: "--code-signature-flags=runtime"
 
       - name: Package MCP binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: zip vibe-kanban-mcp.zip vibe-kanban-mcp
 
       - name: Notarize signed MCP binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APP_STORE_API_KEY != ''
         uses: indygreg/apple-code-sign-action@v1
         continue-on-error: true
         with:
@@ -309,7 +303,7 @@ jobs:
           app_store_connect_api_key_json_file: app_store_key.json
 
       - name: Sign Review binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         uses: indygreg/apple-code-sign-action@v1
         with:
           input_path: target/${{ matrix.target }}/release/review
@@ -320,11 +314,11 @@ jobs:
           sign_args: "--code-signature-flags=runtime"
 
       - name: Package Review binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: zip vibe-kanban-review.zip vibe-kanban-review
 
       - name: Notarize signed Review binary (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APP_STORE_API_KEY != ''
         uses: indygreg/apple-code-sign-action@v1
         continue-on-error: true
         with:
@@ -334,15 +328,26 @@ jobs:
           app_store_connect_api_key_json_file: app_store_key.json
 
       - name: Prepare signed binaries (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: |
           mkdir -p dist
           cp vibe-kanban.zip dist/vibe-kanban-${{ matrix.name }}.zip
           cp vibe-kanban-mcp.zip dist/vibe-kanban-mcp-${{ matrix.name }}.zip
           cp vibe-kanban-review.zip dist/vibe-kanban-review-${{ matrix.name }}.zip
 
+      - name: Prepare unsigned binaries (macOS)
+        if: runner.os == 'macOS' && (secrets.APPLE_CERTIFICATE_P12_BASE64 == '' || secrets.APPLE_CERTIFICATE_PASSWORD == '')
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/server vibe-kanban
+          cp target/${{ matrix.target }}/release/mcp_task_server vibe-kanban-mcp
+          cp target/${{ matrix.target }}/release/review vibe-kanban-review
+          zip dist/vibe-kanban-${{ matrix.name }}.zip vibe-kanban
+          zip dist/vibe-kanban-mcp-${{ matrix.name }}.zip vibe-kanban-mcp
+          zip dist/vibe-kanban-review-${{ matrix.name }}.zip vibe-kanban-review
+
       - name: Clean up certificates (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_P12_BASE64 != '' && secrets.APPLE_CERTIFICATE_PASSWORD != ''
         run: |
           rm -f certificate.p12
           rm -rf private_keys/
@@ -356,7 +361,7 @@ jobs:
 
   package-npx-cli:
     needs: [bump-version, build-frontend, build-backend]
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     strategy:
       # NOTE: This matrix must be kept in sync with build-backend job above
       # GitHub Actions doesn't support YAML anchors, so duplication is unavoidable
@@ -448,7 +453,7 @@ jobs:
 
   create-prerelease:
     needs: [bump-version, build-frontend, package-npx-cli]
-    runs-on: ubuntu-latest-m
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:

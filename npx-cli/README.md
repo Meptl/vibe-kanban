@@ -19,7 +19,7 @@ npx github:Meptl/vibe-kanban
 Optional overrides for custom release source:
 
 ```bash
-VIBE_KANBAN_RELEASE_TAG=v0.0.136-20260227120000 npx github:owner/repo
+VIBE_KANBAN_RELEASE_TAG=v0.0.136-20260227120000 npx github:Meptl/vibe-kanban
 ```
 
 This will launch the application locally and open it in your browser automatically.
