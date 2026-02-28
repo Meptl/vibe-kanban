@@ -70,8 +70,6 @@ async fn main() -> Result<(), VibeKanbanError> {
         run_cancelled_task_cleanup_loop(deployment_for_cancelled_cleanup).await;
     });
 
-    let app_router = routes::router(deployment.clone());
-
     let port = std::env::var("BACKEND_PORT")
         .or_else(|_| std::env::var("PORT"))
         .ok()
@@ -89,6 +87,8 @@ async fn main() -> Result<(), VibeKanbanError> {
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let listener = tokio::net::TcpListener::bind(format!("{host}:{port}")).await?;
     let actual_port = listener.local_addr()?.port(); // get → 53427 (example)
+    let mcp_base_url = format!("http://127.0.0.1:{actual_port}");
+    let app_router = routes::router(deployment.clone(), &mcp_base_url).await;
 
     // Write port file for discovery if prod, warn on fail
     if let Err(e) = write_port_file(actual_port).await {

@@ -42,12 +42,6 @@ impl Args {
         if let Ok(value) = std::env::var("MCP_TRANSPORT") {
             args.transport = parse_transport(&value)?;
         }
-        if let Ok(value) = std::env::var("MCP_PORT") {
-            let port = value
-                .parse::<u16>()
-                .map_err(|e| anyhow::anyhow!("Invalid MCP_PORT value '{}': {}", value, e))?;
-            args.http_bind = SocketAddr::from(([127, 0, 0, 1], port));
-        }
         if let Ok(value) = std::env::var("MCP_HTTP_BIND") {
             args.http_bind = value
                 .parse()
@@ -141,7 +135,44 @@ fn print_help() {
            --http-bind <ADDR>         Advanced: bind address for HTTP transport (overrides --port)\n\
          \n\
          Environment:\n\
-           MCP_TRANSPORT, MCP_PORT, MCP_HTTP_BIND, VIBE_BACKEND_URL, HOST, BACKEND_PORT, PORT"
+          MCP_TRANSPORT, MCP_HTTP_BIND, VIBE_BACKEND_URL, HOST, BACKEND_PORT, PORT"
+    );
+}
+
+async fn resolve_backend_base_url() -> anyhow::Result<String> {
+    if let Ok(url) = std::env::var("VIBE_BACKEND_URL") {
+        tracing::info!("[MCP] Using backend URL from VIBE_BACKEND_URL: {}", url);
+        return Ok(url);
+    }
+
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+
+    if let Ok(port_str) = std::env::var("BACKEND_PORT") {
+        let port = port_str
+            .parse::<u16>()
+            .map_err(|e| anyhow::anyhow!("Invalid BACKEND_PORT value '{}': {}", port_str, e))?;
+        tracing::info!("[MCP] Using backend port from BACKEND_PORT: {}", port);
+        return Ok(format!("http://{}:{}", host, port));
+    }
+
+    if let Ok(port) = read_port_file("vibe-kanban").await {
+        tracing::info!("[MCP] Using backend port from port file: {}", port);
+        return Ok(format!("http://{}:{}", host, port));
+    }
+
+    if let Ok(port_str) = std::env::var("PORT") {
+        let port = port_str
+            .parse::<u16>()
+            .map_err(|e| anyhow::anyhow!("Invalid PORT value '{}': {}", port_str, e))?;
+        tracing::warn!(
+            "[MCP] Falling back to generic PORT env var (set BACKEND_PORT or VIBE_BACKEND_URL to avoid ambiguity): {}",
+            port
+        );
+        return Ok(format!("http://{}:{}", host, port));
+    }
+
+    anyhow::bail!(
+        "Could not resolve backend URL. Set VIBE_BACKEND_URL or BACKEND_PORT, or start vibe-kanban first so the port file is available."
     );
 }
 
@@ -165,32 +196,8 @@ fn main() -> anyhow::Result<()> {
             tracing::debug!("[MCP] Starting MCP task server version {version}...");
             tracing::info!("[MCP] Transport: {:?}", args.transport);
 
-            // Read backend port from port file or environment variable
-            let base_url = if let Ok(url) = std::env::var("VIBE_BACKEND_URL") {
-                tracing::info!("[MCP] Using backend URL from VIBE_BACKEND_URL: {}", url);
-                url
-            } else {
-                let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-
-                // Get port from environment variables or fall back to port file
-                let port = match std::env::var("BACKEND_PORT").or_else(|_| std::env::var("PORT")) {
-                    Ok(port_str) => {
-                        tracing::info!("[MCP] Using port from environment: {}", port_str);
-                        port_str.parse::<u16>().map_err(|e| {
-                            anyhow::anyhow!("Invalid port value '{}': {}", port_str, e)
-                        })?
-                    }
-                    Err(_) => {
-                        let port = read_port_file("vibe-kanban").await?;
-                        tracing::info!("[MCP] Using port from port file: {}", port);
-                        port
-                    }
-                };
-
-                let url = format!("http://{}:{}", host, port);
-                tracing::info!("[MCP] Using backend URL: {}", url);
-                url
-            };
+            let base_url = resolve_backend_base_url().await?;
+            tracing::info!("[MCP] Using backend URL: {}", base_url);
 
             match args.transport {
                 McpTransport::Stdio => {

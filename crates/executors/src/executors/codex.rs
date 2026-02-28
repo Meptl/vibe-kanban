@@ -37,7 +37,7 @@ use crate::{
         AppendPrompt, AvailabilityInfo, ExecutorError, ExecutorExitResult, SpawnedChild,
         StandardCodingAgentExecutor,
         codex::{jsonrpc::ExitSignalSender, normalize_logs::Error},
-        vk_mcp_port_from_env,
+        vk_mcp_url_from_env,
     },
     stdout_dup::create_stdout_pipe_writer,
 };
@@ -150,12 +150,12 @@ impl StandardCodingAgentExecutor for Codex {
     }
 
     fn vk_mcp_cli(&self) -> Vec<String> {
-        let Some(mcp_port) = vk_mcp_port_from_env() else {
+        let Some(mcp_url) = vk_mcp_url_from_env() else {
             return Vec::new();
         };
         vec![
             "-c".to_string(),
-            format!("mcp_servers.vk.url=\"http://127.0.0.1:{mcp_port}/mcp\""),
+            format!("mcp_servers.vk.url=\"{mcp_url}\""),
         ]
     }
 

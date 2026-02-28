@@ -2,8 +2,12 @@ use axum::{
     Router,
     routing::{IntoMakeService, get},
 };
+use rmcp::transport::{
+    StreamableHttpServerConfig, StreamableHttpService,
+    streamable_http_server::session::local::LocalSessionManager,
+};
 
-use crate::DeploymentImpl;
+use crate::{DeploymentImpl, mcp::task_server::TaskServer};
 
 pub mod approvals;
 pub mod config;
@@ -21,7 +25,14 @@ pub mod task_attempts;
 pub mod task_notifications;
 pub mod tasks;
 
-pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
+pub async fn router(deployment: DeploymentImpl, mcp_base_url: &str) -> IntoMakeService<Router> {
+    let task_service = TaskServer::new(mcp_base_url).init().await;
+    let mcp_service = StreamableHttpService::<TaskServer, LocalSessionManager>::new(
+        move || Ok(task_service.clone()),
+        Default::default(),
+        StreamableHttpServerConfig::default(),
+    );
+
     // Create routers with different middleware layers
     let base_routes = Router::new()
         .route("/health", get(health::health_check))
@@ -42,6 +53,7 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
     Router::new()
         .route("/", get(frontend::serve_frontend_root))
         .route("/{*path}", get(frontend::serve_frontend))
+        .nest_service("/mcp", mcp_service)
         .nest("/api", base_routes)
         .into_make_service()
 }

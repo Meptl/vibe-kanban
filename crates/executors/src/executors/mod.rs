@@ -35,10 +35,29 @@ pub mod gemini;
 pub mod opencode;
 pub mod qwen;
 
-pub(crate) fn vk_mcp_port_from_env() -> Option<u16> {
-    std::env::var("MCP_PORT")
+fn read_vk_backend_port_file() -> Option<u16> {
+    let path = std::env::temp_dir()
+        .join("vibe-kanban")
+        .join("vibe-kanban.port");
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|value| value.trim().parse::<u16>().ok())
+}
+
+pub(crate) fn vk_mcp_url_from_env() -> Option<String> {
+    if let Ok(base_url) = std::env::var("VIBE_BACKEND_URL") {
+        let trimmed = base_url.trim_end_matches('/');
+        return Some(format!("{trimmed}/mcp"));
+    }
+
+    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("BACKEND_PORT")
+        .or_else(|_| std::env::var("PORT"))
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
+        .or_else(read_vk_backend_port_file)?;
+
+    Some(format!("http://{host}:{port}/mcp"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]

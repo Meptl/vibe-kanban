@@ -28,7 +28,7 @@ use crate::{
     env::ExecutionEnv,
     executors::{
         AppendPrompt, AvailabilityInfo, ExecutorError, SpawnedChild, StandardCodingAgentExecutor,
-        codex::client::LogWriter, vk_mcp_port_from_env,
+        codex::client::LogWriter, vk_mcp_url_from_env,
     },
     logs::{
         ActionType, FileChange, NormalizedEntry, NormalizedEntryError, NormalizedEntryType,
@@ -76,12 +76,12 @@ pub struct ClaudeCode {
 }
 
 impl ClaudeCode {
-    fn vk_mcp_command_config_arg_with_port(mcp_port: &str) -> String {
+    fn vk_mcp_command_config_arg(mcp_url: &str) -> String {
         let config = serde_json::json!({
             "mcpServers": {
                 "vk": {
                     "type": "http",
-                    "url": format!("http://127.0.0.1:{mcp_port}/mcp")
+                    "url": mcp_url
                 }
             }
         });
@@ -181,12 +181,12 @@ impl StandardCodingAgentExecutor for ClaudeCode {
     }
 
     fn vk_mcp_cli(&self) -> Vec<String> {
-        let Some(mcp_port) = vk_mcp_port_from_env() else {
+        let Some(mcp_url) = vk_mcp_url_from_env() else {
             return Vec::new();
         };
         vec![
             "--mcp-config".to_string(),
-            Self::vk_mcp_command_config_arg_with_port(&mcp_port.to_string()),
+            Self::vk_mcp_command_config_arg(&mcp_url),
         ]
     }
 
