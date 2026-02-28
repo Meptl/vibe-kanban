@@ -32,7 +32,6 @@ import { Loader } from '@/components/ui/loader';
 
 import { DisclaimerDialog } from '@/components/dialogs/global/DisclaimerDialog';
 import { OnboardingDialog } from '@/components/dialogs/global/OnboardingDialog';
-import { ReleaseNotesDialog } from '@/components/dialogs/global/ReleaseNotesDialog';
 import { ClickedElementsProvider } from './contexts/ClickedElementsProvider';
 import NiceModal from '@ebay/nice-modal-react';
 import { TaskNotificationsProvider } from '@/contexts/TaskNotificationsContext';
@@ -84,15 +83,6 @@ function AppContent() {
         return;
       }
 
-      // 3) Release notes - last step
-      if (config.show_release_notes) {
-        await ReleaseNotesDialog.show();
-        if (!cancelled) {
-          await updateAndSaveConfig({ show_release_notes: false });
-        }
-        ReleaseNotesDialog.hide();
-        return;
-      }
     };
 
     showNextStep();

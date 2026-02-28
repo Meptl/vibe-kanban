@@ -52,8 +52,6 @@ pub struct Config {
     pub notifications: NotificationConfig,
     pub editor: EditorConfig,
     pub workspace_dir: Option<String>,
-    pub last_app_version: Option<String>,
-    pub show_release_notes: bool,
     #[serde(default = "default_show_new_attempt_drag_warning")]
     pub show_new_attempt_drag_warning: bool,
     #[serde(default)]
@@ -81,8 +79,6 @@ impl Config {
             },
             editor: old_config.editor,
             workspace_dir: old_config.workspace_dir,
-            last_app_version: old_config.last_app_version,
-            show_release_notes: old_config.show_release_notes,
             show_new_attempt_drag_warning: default_show_new_attempt_drag_warning(),
             language: old_config.language,
             git_branch_prefix: old_config.git_branch_prefix,
@@ -128,8 +124,6 @@ impl Default for Config {
             notifications: NotificationConfig::default(),
             editor: EditorConfig::default(),
             workspace_dir: None,
-            last_app_version: None,
-            show_release_notes: false,
             show_new_attempt_drag_warning: default_show_new_attempt_drag_warning(),
             language: UiLanguage::default(),
             git_branch_prefix: super::default_git_branch_prefix(),
