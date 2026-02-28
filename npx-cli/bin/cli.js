@@ -6,7 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const { ensureBinary, CACHE_DIR, getLatestVersion } = require("./download");
 
-const CLI_VERSION = require("../package.json").version;
+const CLI_VERSION = require("../../package.json").version;
 
 // Resolve effective arch for our published 64-bit binaries only.
 // Any ARM → arm64; anything else → x64. On macOS, handle Rosetta.
