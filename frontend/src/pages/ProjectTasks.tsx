@@ -728,6 +728,19 @@ export function ProjectTasks() {
       if (!task || task.status === newStatus) return;
 
       try {
+        const shouldStopAgent =
+          task.status === 'inprogress' &&
+          newStatus !== 'inprogress' &&
+          task.has_in_progress_attempt;
+
+        if (shouldStopAgent) {
+          const attempts = await attemptsApi.getAll(task.id);
+          const runningAttempt = attempts[0];
+          if (runningAttempt) {
+            await attemptsApi.stop(runningAttempt.id);
+          }
+        }
+
         const shouldAutoStartAttempt =
           newStatus === 'inprogress' && !!projectId && !!config?.executor_profile;
         let existingAttempts = null;
