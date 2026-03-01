@@ -145,12 +145,9 @@ export default function DiffCard({
     diffOptions,
   ]);
 
-  const add = isOmitted
-    ? (diff.additions ?? 0)
-    : (diffFile?.additionLength ?? 0);
-  const del = isOmitted
-    ? (diff.deletions ?? 0)
-    : (diffFile?.deletionLength ?? 0);
+  const add = isOmitted ? diff.additions : (diffFile?.additionLength ?? 0);
+  const del = isOmitted ? diff.deletions : (diffFile?.deletionLength ?? 0);
+  const showLineStats = !isOmitted || add !== null || del !== null;
 
   // Review functionality
   const filePath = newName || oldName || 'unknown';
@@ -266,12 +263,22 @@ export default function DiffCard({
       ) : (
         <span>{newName}</span>
       )}
-      <span className="ml-3" style={{ color: 'hsl(var(--console-success))' }}>
-        +{add}
-      </span>
-      <span className="ml-2" style={{ color: 'hsl(var(--console-error))' }}>
-        -{del}
-      </span>
+      {showLineStats && (
+        <>
+          <span
+            className="ml-3"
+            style={{ color: 'hsl(var(--console-success))' }}
+          >
+            +{add ?? 0}
+          </span>
+          <span
+            className="ml-2"
+            style={{ color: 'hsl(var(--console-error))' }}
+          >
+            -{del ?? 0}
+          </span>
+        </>
+      )}
       {commentsForFile.length > 0 && (
         <span className="ml-3 inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded">
           <MessageSquare className="h-3 w-3" />

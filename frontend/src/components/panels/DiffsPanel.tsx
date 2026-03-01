@@ -7,7 +7,7 @@ import DiffViewSwitch from '@/components/DiffViewSwitch';
 import DiffCard from '@/components/DiffCard';
 import { useDiffSummary } from '@/hooks/useDiffSummary';
 import { NewCardHeader } from '@/components/ui/new-card';
-import { ChevronsUp, ChevronsDown } from 'lucide-react';
+import { ChevronsUp, ChevronsDown, AlertTriangle } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -15,6 +15,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { TaskAttempt, Diff } from 'shared/types';
+import { generateDiffFile } from '@git-diff-view/file';
+import { getHighLightLanguageFromPath } from '@/utils/extToLanguage';
 
 interface DiffsPanelProps {
   selectedAttempt: TaskAttempt | null;
@@ -142,6 +144,35 @@ function DiffsPanelContent({
   loading,
   t,
 }: DiffsPanelContentProps) {
+  const errantFileCount = useMemo(() => {
+    return diffs.reduce((count, diff) => {
+      if (diff.contentOmitted) return count + 1;
+
+      const oldContent = diff.oldContent || '';
+      const newContent = diff.newContent || '';
+      if (oldContent === newContent) return count;
+
+      try {
+        const oldName = diff.oldPath || diff.newPath || 'unknown';
+        const newName = diff.newPath || diff.oldPath || 'unknown';
+        const oldLang = getHighLightLanguageFromPath(oldName) || 'plaintext';
+        const newLang = getHighLightLanguageFromPath(newName) || 'plaintext';
+        const file = generateDiffFile(
+          oldName,
+          oldContent,
+          newName,
+          newContent,
+          oldLang,
+          newLang
+        );
+        file.initRaw();
+        return count;
+      } catch {
+        return count + 1;
+      }
+    }, 0);
+  }, [diffs]);
+
   return (
     <div className="h-full flex flex-col relative">
       {diffs.length > 0 && (
@@ -189,6 +220,27 @@ function DiffsPanelContent({
                 +{added}
               </span>{' '}
               <span className="text-red-600 dark:text-red-500">-{deleted}</span>
+              {errantFileCount > 0 && (
+                <>
+                  {' '}
+                  <span className="opacity-50">•</span>{' '}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex items-center align-middle gap-1 leading-none text-warning">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          {errantFileCount}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {errantFileCount} file
+                        {errantFileCount === 1 ? '' : 's'} omitted or
+                        unrenderable; totals may be incomplete.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </>
+              )}
             </span>
           </div>
         </NewCardHeader>
