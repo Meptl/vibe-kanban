@@ -144,7 +144,7 @@ function DenyReasonForm({
       <PlainTextTagTextarea
         value={value}
         onChange={onChange}
-        placeholder="Let the agent know why this request was denied... Type @ to insert tags or search files."
+        placeholder="Let the agent know why this request was denied... Type @ to insert tags or search files and tasks."
         disabled={isResponding}
         className="min-h-[80px] border rounded-md p-3 bg-background font-mono text-sm"
         projectId={projectId}

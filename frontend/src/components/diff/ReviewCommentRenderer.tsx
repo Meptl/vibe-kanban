@@ -44,7 +44,7 @@ export function ReviewCommentRenderer({
         <PlainTextTagTextarea
           value={editText}
           onChange={setEditText}
-          placeholder="Edit comment... (type @ to search files)"
+          placeholder="Edit comment... (type @ to search files or tasks)"
           className="w-full bg-background text-foreground text-sm font-mono min-h-[80px] border rounded-md p-3"
           projectId={projectId}
           onCmdEnter={handleSave}
