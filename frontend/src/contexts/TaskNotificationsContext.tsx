@@ -96,11 +96,15 @@ export function TaskNotificationsProvider({
     if (!match) return null;
     return { projectId: match[1], taskId: match[2] };
   }, [location.pathname]);
+  const initialStreamData = useCallback(
+    (): TaskNotificationsStreamState => ({ task_notifications: {} }),
+    []
+  );
 
   const { data: streamData } = useJsonPatchWsStream<TaskNotificationsStreamState>(
     '/api/task-notifications/stream/ws',
     true,
-    () => ({ task_notifications: {} })
+    initialStreamData
   );
 
   useEffect(() => {
