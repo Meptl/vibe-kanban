@@ -8,23 +8,20 @@ use axum::{
     response::Json as ResponseJson,
     routing::{get, post},
 };
-use db::models::project::{
-    CreateProject, Project, ProjectError, SearchMatchType, SearchResult, UpdateProject,
-};
+use db::models::project::{CreateProject, Project, ProjectError, SearchResult, UpdateProject};
 use ignore::WalkBuilder;
 use local_deployment::Deployment;
 use services::services::{
-    file_ranker::FileRanker,
-    file_search_cache::{CacheError, SearchMode, SearchQuery},
+    file_search_cache::{
+        CacheError, SETTINGS_FUZZY_SCORE_THRESHOLD, SETTINGS_MAX_RESULTS, SearchMode, SearchQuery,
+        TASK_FORM_FUZZY_SCORE_THRESHOLD, TASK_FORM_MAX_RESULTS, fuzzy_file_score,
+    },
     git::GitBranch,
 };
 use utils::{path::expand_tilde, response::ApiResponse};
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError, middleware::load_project_middleware};
-
-const SETTINGS_MAX_RESULTS: usize = 20;
-const SETTINGS_FUZZY_SCORE_THRESHOLD: i32 = 35;
 
 pub async fn get_projects(
     State(deployment): State<DeploymentImpl>,
@@ -362,9 +359,12 @@ async fn search_files_in_repo(
         return Err("Repository path does not exist".into());
     }
 
-    let mut results = Vec::new();
     let mut scored_results: Vec<(i32, SearchResult)> = Vec::new();
     let query_lower = query.to_lowercase();
+    let (score_threshold, max_results) = match mode {
+        SearchMode::Settings => (SETTINGS_FUZZY_SCORE_THRESHOLD, SETTINGS_MAX_RESULTS),
+        SearchMode::TaskForm => (TASK_FORM_FUZZY_SCORE_THRESHOLD, TASK_FORM_MAX_RESULTS),
+    };
 
     // Configure walker based on mode
     let walker = match mode {
@@ -413,168 +413,27 @@ async fn search_files_in_repo(
         let relative_path = path.strip_prefix(repo_path)?;
         let relative_path_str = relative_path.to_string_lossy().to_lowercase();
 
-        let file_name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-
-        if matches!(mode, SearchMode::Settings) {
-            if let Some((score, match_type)) =
-                fuzzy_settings_score(&relative_path_str, &file_name, &query_lower)
-            {
-                if score < SETTINGS_FUZZY_SCORE_THRESHOLD {
-                    continue;
-                }
-                scored_results.push((
-                    score,
-                    SearchResult {
-                        path: relative_path.to_string_lossy().to_string(),
-                        is_file: path.is_file(),
-                        match_type,
-                    },
-                ));
+        if let Some((score, match_type)) = fuzzy_file_score(&relative_path_str, &query_lower) {
+            if score < score_threshold {
+                continue;
             }
-            continue;
-        }
-
-        // Check for matches
-        if file_name.contains(&query_lower) {
-            results.push(SearchResult {
-                path: relative_path.to_string_lossy().to_string(),
-                is_file: path.is_file(),
-                match_type: SearchMatchType::FileName,
-            });
-        } else if relative_path_str.contains(&query_lower) {
-            // Check if it's a directory name match or full path match
-            let match_type = if path
-                .parent()
-                .and_then(|p| p.file_name())
-                .map(|name| name.to_string_lossy().to_lowercase())
-                .unwrap_or_default()
-                .contains(&query_lower)
-            {
-                SearchMatchType::DirectoryName
-            } else {
-                SearchMatchType::FullPath
-            };
-
-            results.push(SearchResult {
-                path: relative_path.to_string_lossy().to_string(),
-                is_file: path.is_file(),
-                match_type,
-            });
+            scored_results.push((
+                score,
+                SearchResult {
+                    path: relative_path.to_string_lossy().to_string(),
+                    is_file: path.is_file(),
+                    match_type,
+                },
+            ));
         }
     }
 
-    if matches!(mode, SearchMode::Settings) {
-        scored_results.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
-        return Ok(scored_results
-            .into_iter()
-            .take(SETTINGS_MAX_RESULTS)
-            .map(|(_, result)| result)
-            .collect());
-    }
-
-    // Apply git history-based ranking
-    let file_ranker = FileRanker::new();
-    match file_ranker.get_stats(repo_path).await {
-        Ok(stats) => {
-            // Re-rank results using git history
-            file_ranker.rerank(&mut results, &stats);
-        }
-        Err(e) => {
-            tracing::warn!(
-                "Failed to get git stats for ranking, using basic sort: {}",
-                e
-            );
-            // Fallback to basic priority sorting
-            results.sort_by(|a, b| {
-                let priority = |match_type: &SearchMatchType| match match_type {
-                    SearchMatchType::FileName => 0,
-                    SearchMatchType::DirectoryName => 1,
-                    SearchMatchType::FullPath => 2,
-                };
-
-                priority(&a.match_type)
-                    .cmp(&priority(&b.match_type))
-                    .then_with(|| a.path.cmp(&b.path))
-            });
-        }
-    }
-
-    // Limit to top 10 results
-    results.truncate(10);
-
-    Ok(results)
-}
-
-fn subsequence_match_span(haystack: &str, needle: &str) -> Option<(usize, usize)> {
-    if needle.is_empty() {
-        return Some((0, 0));
-    }
-
-    let haystack_bytes = haystack.as_bytes();
-    let needle_bytes = needle.as_bytes();
-    let mut needle_idx = 0usize;
-    let mut start = None;
-
-    for (idx, byte) in haystack_bytes.iter().enumerate() {
-        if *byte == needle_bytes[needle_idx] {
-            if start.is_none() {
-                start = Some(idx);
-            }
-            needle_idx += 1;
-            if needle_idx == needle_bytes.len() {
-                return Some((start.unwrap_or(0), idx));
-            }
-        }
-    }
-
-    None
-}
-
-fn fuzzy_settings_score(
-    path_lower: &str,
-    file_name_lower: &str,
-    query_lower: &str,
-) -> Option<(i32, SearchMatchType)> {
-    let (span_start, span_end) = subsequence_match_span(path_lower, query_lower)?;
-    let span_len = (span_end.saturating_sub(span_start) + 1) as i32;
-    let query_len = query_lower.len() as i32;
-
-    let match_type = if file_name_lower.contains(query_lower) {
-        SearchMatchType::FileName
-    } else if path_lower
-        .rsplit_once('/')
-        .map(|(parent, _)| parent.rsplit('/').next().unwrap_or(parent))
-        .unwrap_or("")
-        .contains(query_lower)
-    {
-        SearchMatchType::DirectoryName
-    } else {
-        SearchMatchType::FullPath
-    };
-
-    let mut score = 0i32;
-    if file_name_lower == query_lower {
-        score += 220;
-    }
-    if file_name_lower.starts_with(query_lower) {
-        score += 160;
-    } else if file_name_lower.contains(query_lower) {
-        score += 120;
-    }
-
-    if path_lower.starts_with(query_lower) {
-        score += 80;
-    } else if path_lower.contains(query_lower) {
-        score += 40;
-    }
-
-    score += (query_len * 20) - (span_len - query_len).max(0);
-    score -= (path_lower.len() as i32 / 24).min(20);
-
-    Some((score, match_type))
+    scored_results.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
+    Ok(scored_results
+        .into_iter()
+        .take(max_results)
+        .map(|(_, result)| result)
+        .collect())
 }
 
 pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {

@@ -23,8 +23,10 @@ use super::{
     git::GitService,
 };
 
-const SETTINGS_MAX_RESULTS: usize = 20;
-const SETTINGS_FUZZY_SCORE_THRESHOLD: i32 = 35;
+pub const SETTINGS_MAX_RESULTS: usize = 20;
+pub const SETTINGS_FUZZY_SCORE_THRESHOLD: i32 = 35;
+pub const TASK_FORM_MAX_RESULTS: usize = 10;
+pub const TASK_FORM_FUZZY_SCORE_THRESHOLD: i32 = 20;
 
 /// Search mode for different use cases
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -69,11 +71,12 @@ fn subsequence_match_span(haystack: &str, needle: &str) -> Option<(usize, usize)
     None
 }
 
-fn fuzzy_settings_score(path_lower: &str, query_lower: &str) -> Option<(i32, SearchMatchType)> {
+pub fn fuzzy_file_score(path_lower: &str, query_lower: &str) -> Option<(i32, SearchMatchType)> {
     let file_name = path_lower.rsplit('/').next().unwrap_or(path_lower);
     let (span_start, span_end) = subsequence_match_span(path_lower, query_lower)?;
     let span_len = (span_end.saturating_sub(span_start) + 1) as i32;
     let query_len = query_lower.len() as i32;
+    let gap_penalty = (span_len - query_len).max(0);
 
     let mut score = 0i32;
     let match_type = if file_name.contains(query_lower) {
@@ -104,8 +107,9 @@ fn fuzzy_settings_score(path_lower: &str, query_lower: &str) -> Option<(i32, Sea
         score += 40;
     }
 
-    // Prefer compact subsequence matches.
-    score += (query_len * 20) - (span_len - query_len).max(0);
+    // Prefer compact and earlier subsequence matches.
+    score += (query_len * 20) - gap_penalty;
+    score -= (span_start as i32 / 2).min(25);
     // Slightly penalize deep/long paths.
     score -= (path_lower.len() as i32 / 24).min(20);
 
@@ -294,58 +298,45 @@ impl FileSearchCache {
         mode: SearchMode,
     ) -> Vec<SearchResult> {
         let query_lower = query.to_lowercase();
-        let mut results = Vec::new();
+        let mut scored_results = Vec::new();
+        let (score_threshold, max_results) = match mode {
+            SearchMode::Settings => (SETTINGS_FUZZY_SCORE_THRESHOLD, SETTINGS_MAX_RESULTS),
+            SearchMode::TaskForm => (TASK_FORM_FUZZY_SCORE_THRESHOLD, TASK_FORM_MAX_RESULTS),
+        };
 
-        if matches!(mode, SearchMode::Settings) {
-            let mut scored_results = Vec::new();
-            for indexed_file in &cached.indexed_files {
-                if let Some((score, match_type)) =
-                    fuzzy_settings_score(&indexed_file.path_lowercase, &query_lower)
-                {
-                    if score < SETTINGS_FUZZY_SCORE_THRESHOLD {
-                        continue;
-                    }
-                    scored_results.push((
-                        score,
-                        SearchResult {
-                            path: indexed_file.path.clone(),
-                            is_file: indexed_file.is_file,
-                            match_type,
-                        },
-                    ));
-                }
+        for indexed_file in &cached.indexed_files {
+            if matches!(mode, SearchMode::TaskForm) && indexed_file.is_ignored {
+                continue;
             }
 
-            scored_results.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
-            scored_results.truncate(SETTINGS_MAX_RESULTS);
-            return scored_results
-                .into_iter()
-                .map(|(_, result)| result)
-                .collect();
-        }
-
-        // Search through indexed files with mode-based filtering
-        for indexed_file in &cached.indexed_files {
-            if indexed_file.path_lowercase.contains(&query_lower) {
-                // Exclude ignored files for task forms
-                if indexed_file.is_ignored {
+            if let Some((score, match_type)) =
+                fuzzy_file_score(&indexed_file.path_lowercase, &query_lower)
+            {
+                if score < score_threshold {
                     continue;
                 }
-
-                results.push(SearchResult {
-                    path: indexed_file.path.clone(),
-                    is_file: indexed_file.is_file,
-                    match_type: indexed_file.match_type.clone(),
-                });
+                scored_results.push((
+                    score,
+                    SearchResult {
+                        path: indexed_file.path.clone(),
+                        is_file: indexed_file.is_file,
+                        match_type,
+                    },
+                ));
             }
         }
 
-        // Apply git history-based ranking
-        self.file_ranker.rerank(&mut results, &cached.stats);
+        scored_results.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
+        scored_results
+            .into_iter()
+            .take(max_results)
+            .map(|(_, result)| result)
+            .collect()
 
-        // Limit to top 10 results
-        results.truncate(10);
-        results
+        /*
+        We intentionally do not apply git-history reranking here. The backend fuzzy
+        score is the source of truth for ordering and the frontend now renders as-is.
+        */
     }
 
     /// Build cache entry for a repository

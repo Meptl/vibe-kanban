@@ -42,27 +42,6 @@ function rankTagsWithFzf(tags: Tag[], query: string): Tag[] {
   return fzf.find(query).map((result) => result.item);
 }
 
-function rankFilesWithFzf(
-  files: FileSearchResult[],
-  query: string
-): FileSearchResult[] {
-  if (files.length === 0) return files;
-  if (query.length === 0) return files;
-  const filteredFiles = files.filter(
-    (file) =>
-      isSubsequenceMatch(file.name, query) ||
-      isSubsequenceMatch(file.path, query)
-  );
-  if (filteredFiles.length === 0) return [];
-
-  const fzf = new Fzf(filteredFiles, {
-    selector: (file) => `${file.name}\n${file.path}`,
-    forward: false,
-  });
-
-  return fzf.find(query).map((result) => result.item);
-}
-
 function rankTasksWithFzf(tasks: TaskWithAttemptStatus[], query: string) {
   if (tasks.length === 0) return tasks;
   if (query.length === 0) return tasks;
@@ -116,8 +95,7 @@ export async function searchTagsAndFiles(
       ...item,
       name: item.path.split('/').pop() || item.path,
     }));
-    const matchedFiles = rankFilesWithFzf(fileSearchResults, trimmedQuery);
-    const fileMentionResults = matchedFiles.map((file) => ({
+    const fileMentionResults = fileSearchResults.map((file) => ({
       type: 'file' as const,
       file,
     }));
