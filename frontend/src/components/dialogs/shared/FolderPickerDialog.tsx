@@ -19,6 +19,7 @@ import {
   Home,
   Search,
 } from 'lucide-react';
+import { Fzf } from 'fzf';
 import { fileSystemApi } from '@/lib/api';
 import { DirectoryEntry, DirectoryListResponse } from 'shared/types';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
@@ -28,6 +29,46 @@ export interface FolderPickerDialogProps {
   value?: string;
   title?: string;
   description?: string;
+}
+
+function isSubsequenceMatch(haystack: string, needle: string): boolean {
+  if (needle.length === 0) return true;
+
+  let queryIndex = 0;
+  const haystackLower = haystack.toLowerCase();
+  const needleLower = needle.toLowerCase();
+
+  for (let i = 0; i < haystackLower.length; i += 1) {
+    if (haystackLower[i] === needleLower[queryIndex]) {
+      queryIndex += 1;
+      if (queryIndex === needleLower.length) return true;
+    }
+  }
+
+  return false;
+}
+
+function rankDirectoriesWithFzf(
+  entries: DirectoryEntry[],
+  query: string
+): DirectoryEntry[] {
+  if (entries.length === 0 || query.length === 0) return entries;
+
+  const directoryEntries = entries.filter((entry) => entry.is_directory);
+  const filteredEntries = directoryEntries.filter(
+    (entry) =>
+      isSubsequenceMatch(entry.name, query) ||
+      isSubsequenceMatch(String(entry.path), query)
+  );
+
+  if (filteredEntries.length === 0) return [];
+
+  const fzf = new Fzf(filteredEntries, {
+    selector: (entry) => `${entry.name}\n${entry.path}`,
+    forward: false,
+  });
+
+  return fzf.find(query).map((result) => result.item);
 }
 
 const FolderPickerDialogImpl = NiceModal.create<FolderPickerDialogProps>(
@@ -45,10 +86,9 @@ const FolderPickerDialogImpl = NiceModal.create<FolderPickerDialogProps>(
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredEntries = useMemo(() => {
-      if (!searchTerm.trim()) return entries;
-      return entries.filter((entry) =>
-        entry.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const trimmedSearch = searchTerm.trim();
+      if (!trimmedSearch) return entries;
+      return rankDirectoriesWithFzf(entries, trimmedSearch);
     }, [entries, searchTerm]);
 
     useEffect(() => {
@@ -183,7 +223,7 @@ const FolderPickerDialogImpl = NiceModal.create<FolderPickerDialogProps>(
                 <Input
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Filter folders and files..."
+                  placeholder="Filter directories..."
                   className="pl-10"
                 />
               </div>
