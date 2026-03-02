@@ -90,6 +90,7 @@ export function TaskNotificationsProvider({
   const toastTimersRef = useRef<Record<string, number>>({});
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
   const didHydrateRef = useRef(false);
+  const sessionStartedAtRef = useRef(Date.now());
   const currentTaskRoute = useMemo(() => {
     const match = location.pathname.match(/^\/projects\/([^/]+)\/tasks\/([^/]+)/);
     if (!match) return null;
@@ -235,6 +236,11 @@ export function TaskNotificationsProvider({
 
     for (const notification of newlyAdded) {
       seenNotificationIdsRef.current.add(notification.id);
+
+      const isFromCurrentSession = notification.createdAt > sessionStartedAtRef.current;
+      if (!isFromCurrentSession) {
+        continue;
+      }
 
       const isCurrentTask =
         currentTaskRoute &&
