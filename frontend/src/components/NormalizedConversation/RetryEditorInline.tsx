@@ -11,7 +11,6 @@ import { imagesApi } from '@/lib/api';
 import type { TaskAttempt } from 'shared/types';
 import { useAttemptExecution } from '@/hooks/useAttemptExecution';
 import { useUserSystem } from '@/components/ConfigProvider';
-import { useBranchStatus } from '@/hooks/useBranchStatus';
 import { useVariant } from '@/hooks/useVariant';
 import { useRetryProcess } from '@/hooks/useRetryProcess';
 import { extractProfileFromAction } from '@/utils/executor';
@@ -36,7 +35,6 @@ export function RetryEditorInline({
   const { t } = useTranslation(['common']);
   const attemptId = attempt.id;
   const { isAttemptRunning, attemptData } = useAttemptExecution(attemptId);
-  const { data: branchStatus } = useBranchStatus(attemptId);
   const { profiles } = useUserSystem();
   const { projectId } = useProject();
 
@@ -78,8 +76,6 @@ export function RetryEditorInline({
       message,
       variant: selectedVariant,
       executionProcessId,
-      branchStatus,
-      processes: attemptData.processes,
     });
   }, [
     canSend,
@@ -87,8 +83,6 @@ export function RetryEditorInline({
     message,
     selectedVariant,
     executionProcessId,
-    branchStatus,
-    attemptData.processes,
   ]);
 
   const handleCmdEnter = useCallback(() => {
