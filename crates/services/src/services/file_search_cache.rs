@@ -7,10 +7,12 @@ use std::{
 use dashmap::DashMap;
 use db::models::project::{SearchMatchType, SearchResult};
 use fst::{Map, MapBuilder};
+use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use ignore::WalkBuilder;
 use moka::future::Cache;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebounceEventResult, new_debouncer};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use thiserror::Error;
@@ -46,39 +48,18 @@ pub struct SearchQuery {
     pub mode: SearchMode,
 }
 
-fn subsequence_match_span(haystack: &str, needle: &str) -> Option<(usize, usize)> {
-    if needle.is_empty() {
-        return Some((0, 0));
-    }
-
-    let haystack_bytes = haystack.as_bytes();
-    let needle_bytes = needle.as_bytes();
-    let mut needle_idx = 0usize;
-    let mut start = None;
-
-    for (idx, byte) in haystack_bytes.iter().enumerate() {
-        if *byte == needle_bytes[needle_idx] {
-            if start.is_none() {
-                start = Some(idx);
-            }
-            needle_idx += 1;
-            if needle_idx == needle_bytes.len() {
-                return Some((start.unwrap_or(0), idx));
-            }
-        }
-    }
-
-    None
-}
+static PATH_FUZZY_MATCHER: Lazy<SkimMatcherV2> = Lazy::new(SkimMatcherV2::default);
 
 pub fn fuzzy_file_score(path_lower: &str, query_lower: &str) -> Option<(i32, SearchMatchType)> {
-    let file_name = path_lower.rsplit('/').next().unwrap_or(path_lower);
-    let (span_start, span_end) = subsequence_match_span(path_lower, query_lower)?;
-    let span_len = (span_end.saturating_sub(span_start) + 1) as i32;
-    let query_len = query_lower.len() as i32;
-    let gap_penalty = (span_len - query_len).max(0);
+    let query_lower = query_lower.trim();
+    if query_lower.is_empty() {
+        return None;
+    }
 
-    let mut score = 0i32;
+    let file_name = path_lower.rsplit('/').next().unwrap_or(path_lower);
+    let base_score = PATH_FUZZY_MATCHER.fuzzy_match(path_lower, query_lower)? as i32;
+
+    let mut score = base_score;
     let match_type = if file_name.contains(query_lower) {
         SearchMatchType::FileName
     } else if path_lower
@@ -107,9 +88,6 @@ pub fn fuzzy_file_score(path_lower: &str, query_lower: &str) -> Option<(i32, Sea
         score += 40;
     }
 
-    // Prefer compact and earlier subsequence matches.
-    score += (query_len * 20) - gap_penalty;
-    score -= (span_start as i32 / 2).min(25);
     // Slightly penalize deep/long paths.
     score -= (path_lower.len() as i32 / 24).min(20);
 
