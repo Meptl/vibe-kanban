@@ -181,6 +181,18 @@ export function ProjectTasks() {
     () => (taskId ? (tasksById[taskId] ?? null) : null),
     [taskId, tasksById]
   );
+  const hasCurrentProjectTasksSnapshot = useMemo(() => {
+    if (!projectId) return false;
+
+    const allTasks = Object.values(tasksById);
+    if (allTasks.length === 0) {
+      // Wait for the new project's stream to connect before deciding
+      // whether a task route should fall back to the board.
+      return isConnected;
+    }
+
+    return allTasks.every((task) => task.project_id === projectId);
+  }, [projectId, tasksById, isConnected]);
 
   useEffect(() => {
     if (!projectId || !selectedTask) return;
@@ -303,10 +315,18 @@ export function ProjectTasks() {
 
   useEffect(() => {
     if (!projectId || !taskId || isLoading) return;
+    if (!hasCurrentProjectTasksSnapshot) return;
     if (selectedTask === null) {
       navigate(`/projects/${projectId}/tasks`, { replace: true });
     }
-  }, [projectId, taskId, isLoading, selectedTask, navigate]);
+  }, [
+    projectId,
+    taskId,
+    isLoading,
+    hasCurrentProjectTasksSnapshot,
+    selectedTask,
+    navigate,
+  ]);
 
   const isTaskView = !!taskId && !effectiveAttemptId;
   const { data: attempt } = useTaskAttempt(effectiveAttemptId);
