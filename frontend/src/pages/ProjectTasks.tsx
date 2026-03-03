@@ -26,7 +26,6 @@ import { useSearch } from '@/contexts/SearchContext';
 import { useProject } from '@/contexts/ProjectContext';
 import { useTaskAttempts } from '@/hooks/useTaskAttempts';
 import { useTaskAttempt } from '@/hooks/useTaskAttempt';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useBranchStatus, useAttemptExecution } from '@/hooks';
 import { paths } from '@/lib/paths';
 import { ExecutionProcessesProvider } from '@/contexts/ExecutionProcessesContext';
@@ -146,8 +145,6 @@ export function ProjectTasks() {
   const queryClient = useQueryClient();
   const { enableScope, disableScope, activeScopes } = useHotkeysContext();
   const [searchParams, setSearchParams] = useSearchParams();
-  const isXL = useMediaQuery('(min-width: 1280px)');
-  const isMobile = !isXL;
   const [dropPreview, setDropPreview] = useState<DropPreview>(null);
 
   const {
@@ -1190,7 +1187,6 @@ export function ProjectTasks() {
               aux={auxContent}
               isPanelOpen={isPanelOpen}
               mode={effectiveMode}
-              isMobile={isMobile}
               rightHeader={rightHeader}
             />
           </ExecutionProcessesProvider>

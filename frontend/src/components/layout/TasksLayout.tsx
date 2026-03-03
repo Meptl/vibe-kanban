@@ -11,7 +11,6 @@ interface TasksLayoutProps {
   aux: ReactNode;
   isPanelOpen: boolean;
   mode: LayoutMode;
-  isMobile?: boolean;
   rightHeader?: ReactNode;
 }
 
@@ -273,63 +272,9 @@ export function TasksLayout({
   aux,
   isPanelOpen,
   mode,
-  isMobile = false,
   rightHeader,
 }: TasksLayoutProps) {
   const desktopKey = isPanelOpen ? 'desktop-with-panel' : 'kanban-only';
-
-  if (isMobile) {
-    const columns = isPanelOpen ? ['0fr', '1fr', '0fr'] : ['1fr', '0fr', '0fr'];
-    const gridTemplateColumns = `minmax(0, ${columns[0]}) minmax(0, ${columns[1]}) minmax(0, ${columns[2]})`;
-    const isKanbanVisible = columns[0] !== '0fr';
-    const isAttemptVisible = columns[1] !== '0fr';
-    const isAuxVisible = columns[2] !== '0fr';
-
-    return (
-      <div
-        className="h-full min-h-0 grid"
-        style={{
-          gridTemplateColumns,
-          transition: 'grid-template-columns 250ms cubic-bezier(0.2, 0, 0, 1)',
-        }}
-      >
-        <div
-          className="min-w-0 min-h-0 overflow-hidden"
-          aria-hidden={!isKanbanVisible}
-          aria-label="Kanban board"
-          role="region"
-          style={{ pointerEvents: isKanbanVisible ? 'auto' : 'none' }}
-        >
-          {kanban}
-        </div>
-
-        <div
-          className="min-w-0 min-h-0 overflow-hidden border-l flex flex-col"
-          aria-hidden={!isAttemptVisible}
-          aria-label="Details"
-          role="region"
-          style={{ pointerEvents: isAttemptVisible ? 'auto' : 'none' }}
-        >
-          {rightHeader && (
-            <div className="shrink-0 sticky top-0 z-20 bg-background border-b">
-              {rightHeader}
-            </div>
-          )}
-          <div className="flex-1 min-h-0">{attempt}</div>
-        </div>
-
-        <div
-          className="min-w-0 min-h-0 overflow-hidden border-l"
-          aria-hidden={!isAuxVisible}
-          aria-label={mode === 'preview' ? 'Preview' : 'Diffs'}
-          role="region"
-          style={{ pointerEvents: isAuxVisible ? 'auto' : 'none' }}
-        >
-          {aux}
-        </div>
-      </div>
-    );
-  }
 
   let desktopNode: ReactNode;
 
