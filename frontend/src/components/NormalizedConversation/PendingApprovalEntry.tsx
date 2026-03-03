@@ -21,7 +21,7 @@ import { PlainTextTagTextarea } from '@/components/ui/plain-text-tag-textarea';
 
 import { useHotkeysContext } from 'react-hotkeys-hook';
 import { TabNavContext } from '@/contexts/TabNavigationContext';
-import { useKeyApproveRequest, useKeyDenyApproval, Scope } from '@/keyboard';
+import { Scope } from '@/keyboard';
 import { useProject } from '@/contexts/ProjectContext';
 import { useApprovalForm } from '@/contexts/ApprovalFormContext';
 
@@ -291,28 +291,6 @@ const PendingApprovalEntry = ({
     const trimmed = denyReason.trim();
     respond(false, trimmed || DEFAULT_DENIAL_REASON);
   }, [denyReason, respond]);
-
-  const triggerDeny = useCallback(
-    (event?: KeyboardEvent) => {
-      if (!isEnteringReason || disabled || hasResponded) return;
-      event?.preventDefault();
-      handleSubmitDeny();
-    },
-    [isEnteringReason, disabled, hasResponded, handleSubmitDeny]
-  );
-
-  useKeyApproveRequest(handleApprove, {
-    scope: Scope.APPROVALS,
-    when: () => shouldEnableApprovalsScope && !isEnteringReason,
-    preventDefault: true,
-  });
-
-  useKeyDenyApproval(triggerDeny, {
-    scope: Scope.APPROVALS,
-    when: () => shouldEnableApprovalsScope && !hasResponded,
-    enableOnFormTags: ['textarea', 'TEXTAREA'],
-    preventDefault: true,
-  });
 
   return (
     <div className="relative mt-3">

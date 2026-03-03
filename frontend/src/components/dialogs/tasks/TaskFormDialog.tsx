@@ -32,7 +32,6 @@ import {
 import { useAttemptCreation } from '@/hooks/useAttemptCreation';
 import {
   useKeySubmitTask,
-  useKeySubmitTaskAlt,
   useKeyExit,
   Scope,
 } from '@/keyboard';
@@ -319,26 +318,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
     preventDefault: true,
   });
 
-  const canSubmitAlt = useStore(
-    form.store,
-    (state) => state.values.title.trim().length > 0 && !state.isSubmitting
-  );
-
-  const handleSubmitCreateOnly = useCallback(() => {
-    forceCreateOnlyRef.current = true;
-    const promise = form.handleSubmit();
-    Promise.resolve(promise).finally(() => {
-      forceCreateOnlyRef.current = false;
-    });
-  }, [form]);
-
-  useKeySubmitTaskAlt(handleSubmitCreateOnly, {
-    enabled: modal.visible && canSubmitAlt && !showDiscardWarning,
-    scope: Scope.DIALOG,
-    enableOnFormTags: ['input', 'INPUT', 'textarea', 'TEXTAREA'],
-    preventDefault: true,
-  });
-
   // Dialog close handling
   const handleDialogClose = (open: boolean) => {
     if (open) return;
@@ -439,7 +418,6 @@ const TaskFormDialogImpl = NiceModal.create<TaskFormDialogProps>((props) => {
                     onPasteFiles={onDrop}
                     className="w-full min-h-[220px] bg-transparent resize-none outline-none font-mono text-md leading-relaxed p-0"
                     onCmdEnter={primaryAction}
-                    onShiftCmdEnter={handleSubmitCreateOnly}
                     disableInternalScroll
                     closeMenuSignal={closeSearchSignal}
                   />

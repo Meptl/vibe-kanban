@@ -40,13 +40,7 @@ import {
   useKeyCreate,
   useKeyExit,
   useKeyFocusSearch,
-  useKeyNavUp,
-  useKeyNavDown,
-  useKeyNavLeft,
-  useKeyNavRight,
-  useKeyOpenDetails,
   Scope,
-  useKeyDeleteTask,
   useKeyCycleViewBackward,
 } from '@/keyboard';
 
@@ -149,7 +143,7 @@ export function ProjectTasks() {
   }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { enableScope, disableScope, activeScopes } = useHotkeysContext();
+  const { enableScope, disableScope } = useHotkeysContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [dropPreview, setDropPreview] = useState<DropPreview>(null);
   const [optimisticStatusByTaskId, setOptimisticStatusByTaskId] = useState<
@@ -553,50 +547,9 @@ export function ProjectTasks() {
     [visibleTasksByStatus]
   );
 
-  useKeyNavUp(
-    () => {
-      selectPreviousTask();
-    },
-    {
-      scope: Scope.KANBAN,
-      preventDefault: true,
-    }
-  );
-
-  useKeyNavDown(
-    () => {
-      selectNextTask();
-    },
-    {
-      scope: Scope.KANBAN,
-      preventDefault: true,
-    }
-  );
-
-  useKeyNavLeft(
-    () => {
-      selectPreviousColumn();
-    },
-    {
-      scope: Scope.KANBAN,
-      preventDefault: true,
-    }
-  );
-
-  useKeyNavRight(
-    () => {
-      selectNextColumn();
-    },
-    {
-      scope: Scope.KANBAN,
-      preventDefault: true,
-    }
-  );
-
   /**
    * Cycle the attempt area view.
-   * - When panel is closed: opens task details (if a task is selected)
-   * - When panel is open: cycles among [attempt, preview, diffs]
+   * Cycles among [attempt, preview, diffs].
    */
   const cycleView = useCallback(
     (direction: 'forward' | 'backward' = 'forward') => {
@@ -611,24 +564,9 @@ export function ProjectTasks() {
     [mode, setMode]
   );
 
-  const cycleViewForward = useCallback(() => cycleView('forward'), [cycleView]);
   const cycleViewBackward = useCallback(
     () => cycleView('backward'),
     [cycleView]
-  );
-
-  // meta/ctrl+enter → open details or cycle forward
-  const isFollowUpReadyActive = activeScopes.includes(Scope.FOLLOW_UP_READY);
-
-  useKeyOpenDetails(
-    () => {
-      if (isPanelOpen) {
-        cycleViewForward();
-      } else if (selectedTask) {
-        handleViewTaskDetails(selectedTask);
-      }
-    },
-    { scope: Scope.KANBAN, when: () => !isFollowUpReadyActive }
   );
 
   // meta/ctrl+shift+enter → cycle backward
@@ -639,17 +577,6 @@ export function ProjectTasks() {
       }
     },
     { scope: Scope.KANBAN, preventDefault: true }
-  );
-
-  useKeyDeleteTask(
-    () => {
-      // Note: Delete is now handled by TaskActionsDropdown
-      // This keyboard shortcut could trigger the dropdown action if needed
-    },
-    {
-      scope: Scope.KANBAN,
-      preventDefault: true,
-    }
   );
 
   const handleClosePanel = useCallback(() => {
@@ -760,96 +687,6 @@ export function ProjectTasks() {
       );
     }
   }, [config, doneCleanupDays, doneTasks, updateAndSaveConfig]);
-
-  const selectNextTask = useCallback(() => {
-    if (selectedTask) {
-      const statusKey = normalizeStatus(selectedTask.status);
-      const tasksInStatus = visibleTasksByStatus[statusKey] || [];
-      const currentIndex = tasksInStatus.findIndex(
-        (task) => task.id === selectedTask.id
-      );
-      if (currentIndex >= 0 && currentIndex < tasksInStatus.length - 1) {
-        handleViewTaskDetails(tasksInStatus[currentIndex + 1]);
-      }
-    } else {
-      for (const status of TASK_STATUSES) {
-        const tasks = visibleTasksByStatus[status];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          break;
-        }
-      }
-    }
-  }, [selectedTask, visibleTasksByStatus, handleViewTaskDetails]);
-
-  const selectPreviousTask = useCallback(() => {
-    if (selectedTask) {
-      const statusKey = normalizeStatus(selectedTask.status);
-      const tasksInStatus = visibleTasksByStatus[statusKey] || [];
-      const currentIndex = tasksInStatus.findIndex(
-        (task) => task.id === selectedTask.id
-      );
-      if (currentIndex > 0) {
-        handleViewTaskDetails(tasksInStatus[currentIndex - 1]);
-      }
-    } else {
-      for (const status of TASK_STATUSES) {
-        const tasks = visibleTasksByStatus[status];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          break;
-        }
-      }
-    }
-  }, [selectedTask, visibleTasksByStatus, handleViewTaskDetails]);
-
-  const selectNextColumn = useCallback(() => {
-    if (selectedTask) {
-      const currentStatus = normalizeStatus(selectedTask.status);
-      const currentIndex = TASK_STATUSES.findIndex(
-        (status) => status === currentStatus
-      );
-      for (let i = currentIndex + 1; i < TASK_STATUSES.length; i++) {
-        const tasks = visibleTasksByStatus[TASK_STATUSES[i]];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          return;
-        }
-      }
-    } else {
-      for (const status of TASK_STATUSES) {
-        const tasks = visibleTasksByStatus[status];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          break;
-        }
-      }
-    }
-  }, [selectedTask, visibleTasksByStatus, handleViewTaskDetails]);
-
-  const selectPreviousColumn = useCallback(() => {
-    if (selectedTask) {
-      const currentStatus = normalizeStatus(selectedTask.status);
-      const currentIndex = TASK_STATUSES.findIndex(
-        (status) => status === currentStatus
-      );
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        const tasks = visibleTasksByStatus[TASK_STATUSES[i]];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          return;
-        }
-      }
-    } else {
-      for (const status of TASK_STATUSES) {
-        const tasks = visibleTasksByStatus[status];
-        if (tasks && tasks.length > 0) {
-          handleViewTaskDetails(tasks[0]);
-          break;
-        }
-      }
-    }
-  }, [selectedTask, visibleTasksByStatus, handleViewTaskDetails]);
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {

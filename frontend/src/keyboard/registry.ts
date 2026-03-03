@@ -16,18 +16,8 @@ export enum Action {
   CREATE = 'create',
   SUBMIT = 'submit',
   FOCUS_SEARCH = 'focus_search',
-  NAV_UP = 'nav_up',
-  NAV_DOWN = 'nav_down',
-  NAV_LEFT = 'nav_left',
-  NAV_RIGHT = 'nav_right',
-  OPEN_DETAILS = 'open_details',
-  SHOW_HELP = 'show_help',
-  DELETE_TASK = 'delete_task',
-  APPROVE_REQUEST = 'approve_request',
-  DENY_APPROVAL = 'deny_approval',
   SUBMIT_FOLLOW_UP = 'submit_follow_up',
   SUBMIT_TASK = 'submit_task',
-  SUBMIT_TASK_ALT = 'submit_task_alt',
   SUBMIT_COMMENT = 'submit_comment',
   CYCLE_VIEW_BACKWARD = 'cycle_view_backward',
 }
@@ -112,81 +102,11 @@ export const keyBindings: KeyBinding[] = [
     group: 'Navigation',
   },
   {
-    action: Action.NAV_UP,
-    keys: 'k',
-    scopes: [Scope.KANBAN],
-    description: 'Move up within column',
-    group: 'Navigation',
-  },
-  {
-    action: Action.NAV_DOWN,
-    keys: 'j',
-    scopes: [Scope.KANBAN],
-    description: 'Move down within column',
-    group: 'Navigation',
-  },
-  {
-    action: Action.NAV_LEFT,
-    keys: 'h',
-    scopes: [Scope.KANBAN],
-    description: 'Move to previous column',
-    group: 'Navigation',
-  },
-  {
-    action: Action.NAV_RIGHT,
-    keys: 'l',
-    scopes: [Scope.KANBAN],
-    description: 'Move to next column',
-    group: 'Navigation',
-  },
-  {
-    action: Action.OPEN_DETAILS,
-    keys: ['meta+enter', 'ctrl+enter'],
-    scopes: [Scope.KANBAN],
-    description:
-      'Open details; when open, cycle views forward (attempt → preview → diffs)',
-    group: 'Navigation',
-  },
-  {
     action: Action.CYCLE_VIEW_BACKWARD,
     keys: ['meta+shift+enter', 'ctrl+shift+enter'],
     scopes: [Scope.KANBAN],
     description: 'Cycle views backward (diffs → preview → attempt)',
     group: 'Navigation',
-  },
-
-  // Global actions
-  {
-    action: Action.SHOW_HELP,
-    keys: 'shift+slash',
-    scopes: [Scope.GLOBAL],
-    description: 'Show keyboard shortcuts help',
-    group: 'Global',
-  },
-
-  // Task actions
-  {
-    action: Action.DELETE_TASK,
-    keys: 'd',
-    scopes: [Scope.KANBAN],
-    description: 'Delete selected task',
-    group: 'Task Details',
-  },
-
-  // Approval actions
-  {
-    action: Action.APPROVE_REQUEST,
-    keys: 'enter',
-    scopes: [Scope.APPROVALS],
-    description: 'Approve pending approval request',
-    group: 'Approvals',
-  },
-  {
-    action: Action.DENY_APPROVAL,
-    keys: ['meta+enter', 'ctrl+enter'],
-    scopes: [Scope.APPROVALS],
-    description: 'Deny pending approval request',
-    group: 'Approvals',
   },
 
   // Follow-up actions
@@ -202,13 +122,6 @@ export const keyBindings: KeyBinding[] = [
     keys: ['meta+enter', 'ctrl+enter'],
     scopes: [Scope.DIALOG],
     description: 'Submit task form (Create & Start or Update)',
-    group: 'Dialog',
-  },
-  {
-    action: Action.SUBMIT_TASK_ALT,
-    keys: ['meta+shift+enter', 'ctrl+shift+enter'],
-    scopes: [Scope.DIALOG],
-    description: 'Submit task form (Create Task)',
     group: 'Dialog',
   },
   {

@@ -52,54 +52,6 @@ export const useKeySubmit = createSemanticHook(Action.SUBMIT);
 export const useKeyFocusSearch = createSemanticHook(Action.FOCUS_SEARCH);
 
 /**
- * Navigation actions - arrow keys and vim keys (hjkl)
- */
-export const useKeyNavUp = createSemanticHook(Action.NAV_UP);
-export const useKeyNavDown = createSemanticHook(Action.NAV_DOWN);
-export const useKeyNavLeft = createSemanticHook(Action.NAV_LEFT);
-export const useKeyNavRight = createSemanticHook(Action.NAV_RIGHT);
-
-/**
- * Open details action - typically Enter key
- *
- * @example
- * useKeyOpenDetails(() => openTaskDetails(), { scope: Scope.KANBAN });
- */
-export const useKeyOpenDetails = createSemanticHook(Action.OPEN_DETAILS);
-
-/**
- * Show help action - typically '?' key
- *
- * @example
- * useKeyShowHelp(() => openHelpDialog(), { scope: Scope.GLOBAL });
- */
-export const useKeyShowHelp = createSemanticHook(Action.SHOW_HELP);
-
-/**
- * Delete task action - typically 'd' key
- *
- * @example
- * useKeyDeleteTask(() => handleDeleteTask(selectedTask), { scope: Scope.KANBAN });
- */
-export const useKeyDeleteTask = createSemanticHook(Action.DELETE_TASK);
-
-/**
- * Approve pending approval action - typically Enter key
- *
- * @example
- * useKeyApproveRequest(() => approvePendingRequest(), { scope: Scope.APPROVALS });
- */
-export const useKeyApproveRequest = createSemanticHook(Action.APPROVE_REQUEST);
-
-/**
- * Deny pending approval action - typically Cmd/Ctrl+Enter
- *
- * @example
- * useKeyDenyApproval(() => denyPendingRequest(), { scope: Scope.GLOBAL });
- */
-export const useKeyDenyApproval = createSemanticHook(Action.DENY_APPROVAL);
-
-/**
  * Submit follow-up action - typically Cmd+Enter
  * Intelligently sends or queues based on current state (running vs idle)
  *
@@ -116,15 +68,6 @@ export const useKeySubmitFollowUp = createSemanticHook(Action.SUBMIT_FOLLOW_UP);
  * useKeySubmitTask(() => handleSubmit(), { scope: Scope.DIALOG, when: canSubmit });
  */
 export const useKeySubmitTask = createSemanticHook(Action.SUBMIT_TASK);
-
-/**
- * Alternative task submit action - typically Cmd+Shift+Enter
- * Secondary submit action in task dialog (Create Task without starting)
- *
- * @example
- * useKeySubmitTaskAlt(() => handleCreateOnly(), { scope: Scope.DIALOG, when: canSubmit });
- */
-export const useKeySubmitTaskAlt = createSemanticHook(Action.SUBMIT_TASK_ALT);
 
 /**
  * Submit comment action - typically Cmd+Enter
