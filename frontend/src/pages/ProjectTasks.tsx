@@ -152,6 +152,9 @@ export function ProjectTasks() {
   const { enableScope, disableScope, activeScopes } = useHotkeysContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [dropPreview, setDropPreview] = useState<DropPreview>(null);
+  const [optimisticStatusByTaskId, setOptimisticStatusByTaskId] = useState<
+    Record<string, TaskStatus>
+  >({});
 
   const {
     projectId,
@@ -175,12 +178,63 @@ export function ProjectTasks() {
   const { query: searchQuery, focusInput } = useSearch();
 
   const {
-    tasks,
-    tasksById,
+    tasks: rawTasks,
+    tasksById: rawTasksById,
     isLoading,
     isConnected,
   } = useProjectTasks(projectId || '');
   const { clearTaskNotifications } = useTaskNotifications();
+
+  const tasksById = useMemo(() => {
+    if (Object.keys(optimisticStatusByTaskId).length === 0) {
+      return rawTasksById;
+    }
+
+    const next: Record<string, TaskWithAttemptStatus> = { ...rawTasksById };
+    Object.entries(optimisticStatusByTaskId).forEach(([id, status]) => {
+      const task = next[id];
+      if (!task || task.status === status) {
+        return;
+      }
+      next[id] = { ...task, status };
+    });
+    return next;
+  }, [rawTasksById, optimisticStatusByTaskId]);
+
+  const tasks = useMemo(() => {
+    if (Object.keys(optimisticStatusByTaskId).length === 0) {
+      return rawTasks;
+    }
+
+    return rawTasks.map((task) => {
+      const status = optimisticStatusByTaskId[task.id];
+      if (!status || task.status === status) {
+        return task;
+      }
+      return { ...task, status };
+    });
+  }, [rawTasks, optimisticStatusByTaskId]);
+
+  useEffect(() => {
+    if (Object.keys(optimisticStatusByTaskId).length === 0) {
+      return;
+    }
+
+    setOptimisticStatusByTaskId((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      Object.entries(prev).forEach(([taskId, status]) => {
+        const task = rawTasksById[taskId];
+        if (!task || task.status === status) {
+          delete next[taskId];
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [rawTasksById, optimisticStatusByTaskId]);
 
   const selectedTask = useMemo(
     () => (taskId ? (tasksById[taskId] ?? null) : null),
@@ -808,14 +862,6 @@ export function ProjectTasks() {
           newStatus !== 'inprogress' &&
           task.has_in_progress_attempt;
 
-        if (shouldStopAgent) {
-          const attempts = await attemptsApi.getAll(task.id);
-          const runningAttempt = attempts[0];
-          if (runningAttempt) {
-            await attemptsApi.stop(runningAttempt.id);
-          }
-        }
-
         const shouldAutoStartAttempt =
           newStatus === 'inprogress' && !!projectId && !!config?.executor_profile;
         let existingAttempts = null;
@@ -882,13 +928,43 @@ export function ProjectTasks() {
           }
         }
 
-        await tasksApi.update(draggedTaskId, {
-          title: task.title,
-          description: task.description,
-          status: newStatus,
-          parent_task_attempt: task.parent_task_attempt,
-          image_ids: null,
-        });
+        setOptimisticStatusByTaskId((prev) => ({
+          ...prev,
+          [draggedTaskId]: newStatus,
+        }));
+
+        const updateTaskStatus = () =>
+          tasksApi.update(draggedTaskId, {
+            title: task.title,
+            description: task.description,
+            status: newStatus,
+            parent_task_attempt: task.parent_task_attempt,
+            image_ids: null,
+          });
+
+        await updateTaskStatus();
+
+        if (shouldStopAgent) {
+          void (async () => {
+            try {
+              const attempts = await attemptsApi.getAll(task.id);
+              const runningAttempt = attempts[0];
+              if (!runningAttempt) {
+                return;
+              }
+
+              await attemptsApi.stop(runningAttempt.id);
+
+              // Stopping execution sets task status to inreview server-side.
+              // Re-apply the user's drop target for other destinations.
+              if (newStatus !== 'inreview') {
+                await updateTaskStatus();
+              }
+            } catch (stopError) {
+              console.error('Failed to stop running attempt after drag:', stopError);
+            }
+          })();
+        }
 
         if (!shouldAutoStartAttempt) {
           return;
@@ -954,6 +1030,11 @@ export function ProjectTasks() {
           }
         );
       } catch (err) {
+        setOptimisticStatusByTaskId((prev) => {
+          const next = { ...prev };
+          delete next[draggedTaskId];
+          return next;
+        });
         console.error(
           'Failed to update task status / auto-start attempt:',
           err
