@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { AlertTriangle, Plus } from 'lucide-react';
@@ -70,7 +71,7 @@ import { AttemptHeaderActions } from '@/components/panels/AttemptHeaderActions';
 import { useTaskNotifications } from '@/contexts/TaskNotificationsContext';
 import type { GitOperationsInputs } from '@/components/tasks/Toolbar/GitOperations';
 
-import type { TaskWithAttemptStatus, TaskStatus } from 'shared/types';
+import type { TaskAttempt, TaskWithAttemptStatus, TaskStatus } from 'shared/types';
 
 type Task = TaskWithAttemptStatus;
 type DropPreview = {
@@ -142,6 +143,7 @@ export function ProjectTasks() {
     attemptId?: string;
   }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { enableScope, disableScope, activeScopes } = useHotkeysContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const isXL = useMediaQuery('(min-width: 1280px)');
@@ -232,12 +234,13 @@ export function ProjectTasks() {
 
   const isLatest = attemptId === 'latest';
   const effectiveAttemptId = attemptId === 'latest' ? undefined : attemptId;
-  const { data: attempts = [], isLoading: isAttemptsLoading } = useTaskAttempts(
-    taskId,
-    {
-      enabled: !!taskId && (isLatest || !!effectiveAttemptId),
-    }
-  );
+  const {
+    data: attempts = [],
+    isLoading: isAttemptsLoading,
+    isFetching: isAttemptsFetching,
+  } = useTaskAttempts(taskId, {
+    enabled: !!taskId && (isLatest || !!effectiveAttemptId),
+  });
 
   const attemptsNewestFirst = useMemo(
     () =>
@@ -293,7 +296,7 @@ export function ProjectTasks() {
   useEffect(() => {
     if (!projectId || !taskId) return;
     if (!isLatest) return;
-    if (isAttemptsLoading) return;
+    if (isAttemptsLoading || isAttemptsFetching) return;
 
     if (!latestAttemptId) {
       navigateWithSearch(paths.task(projectId, taskId), { replace: true });
@@ -308,6 +311,7 @@ export function ProjectTasks() {
     taskId,
     isLatest,
     isAttemptsLoading,
+    isAttemptsFetching,
     latestAttemptId,
     navigateWithSearch,
     navigateToAttemptDiffs,
@@ -877,11 +881,22 @@ export function ProjectTasks() {
           return;
         }
 
-        await attemptsApi.create({
+        const createdAttempt = await attemptsApi.create({
           task_id: task.id,
           executor_profile_id: config.executor_profile,
           base_branch: baseBranch,
         });
+
+        queryClient.setQueryData(
+          ['taskAttempts', task.id],
+          (old: TaskAttempt[] | undefined) => {
+            if (!old || old.length === 0) return [createdAttempt];
+            const withoutCreated = old.filter(
+              (attempt) => attempt.id !== createdAttempt.id
+            );
+            return [createdAttempt, ...withoutCreated];
+          }
+        );
       } catch (err) {
         console.error(
           'Failed to update task status / auto-start attempt:',
@@ -896,6 +911,7 @@ export function ProjectTasks() {
       projectId,
       t,
       tasksById,
+      queryClient,
       updateAndSaveConfig,
     ]
   );
