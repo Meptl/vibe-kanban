@@ -155,6 +155,9 @@ export function ProjectTasks() {
   const [optimisticStatusByTaskId, setOptimisticStatusByTaskId] = useState<
     Record<string, TaskStatus>
   >({});
+  const [stopInFlightByTaskId, setStopInFlightByTaskId] = useState<
+    Record<string, true>
+  >({});
 
   const {
     projectId,
@@ -225,6 +228,9 @@ export function ProjectTasks() {
       let changed = false;
 
       Object.entries(prev).forEach(([taskId, status]) => {
+        if (stopInFlightByTaskId[taskId]) {
+          return;
+        }
         const task = rawTasksById[taskId];
         if (!task || task.status === status) {
           delete next[taskId];
@@ -234,7 +240,7 @@ export function ProjectTasks() {
 
       return changed ? next : prev;
     });
-  }, [rawTasksById, optimisticStatusByTaskId]);
+  }, [rawTasksById, optimisticStatusByTaskId, stopInFlightByTaskId]);
 
   const selectedTask = useMemo(
     () => (taskId ? (tasksById[taskId] ?? null) : null),
@@ -945,6 +951,10 @@ export function ProjectTasks() {
         await updateTaskStatus();
 
         if (shouldStopAgent) {
+          setStopInFlightByTaskId((prev) => ({
+            ...prev,
+            [draggedTaskId]: true,
+          }));
           void (async () => {
             try {
               const attempts = await attemptsApi.getAll(task.id);
@@ -962,6 +972,12 @@ export function ProjectTasks() {
               }
             } catch (stopError) {
               console.error('Failed to stop running attempt after drag:', stopError);
+            } finally {
+              setStopInFlightByTaskId((prev) => {
+                const next = { ...prev };
+                delete next[draggedTaskId];
+                return next;
+              });
             }
           })();
         }
