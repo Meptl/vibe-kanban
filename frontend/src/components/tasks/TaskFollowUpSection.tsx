@@ -491,34 +491,22 @@ export function TaskFollowUpSection({
 
   // Register keyboard shortcuts
   useKeySubmitFollowUp(handleSubmitShortcut, {
-    scope: Scope.FOLLOW_UP_READY,
+    scope: Scope.AGENT_CHAT,
     enableOnFormTags: ['textarea', 'TEXTAREA'],
     when: canSendFollowUp && isEditable,
   });
 
-  // Enable FOLLOW_UP scope when textarea is focused AND editable
-  useEffect(() => {
-    if (isEditable && isTextareaFocused) {
-      enableScope(Scope.FOLLOW_UP);
-    } else {
-      disableScope(Scope.FOLLOW_UP);
-    }
-    return () => {
-      disableScope(Scope.FOLLOW_UP);
-    };
-  }, [isEditable, isTextareaFocused, enableScope, disableScope]);
-
-  // Enable FOLLOW_UP_READY scope when ready to send
+  // Enable AGENT_CHAT scope when ready to send
   useEffect(() => {
     const isReady = isTextareaFocused && isEditable;
 
     if (isReady) {
-      enableScope(Scope.FOLLOW_UP_READY);
+      enableScope(Scope.AGENT_CHAT);
     } else {
-      disableScope(Scope.FOLLOW_UP_READY);
+      disableScope(Scope.AGENT_CHAT);
     }
     return () => {
-      disableScope(Scope.FOLLOW_UP_READY);
+      disableScope(Scope.AGENT_CHAT);
     };
   }, [isTextareaFocused, isEditable, enableScope, disableScope]);
 

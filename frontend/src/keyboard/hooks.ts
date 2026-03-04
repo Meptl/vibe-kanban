@@ -56,9 +56,11 @@ export const useKeyFocusSearch = createSemanticHook(Action.FOCUS_SEARCH);
  * Intelligently sends or queues based on current state (running vs idle)
  *
  * @example
- * useKeySubmitFollowUp(() => handleSubmit(), { scope: Scope.FOLLOW_UP_READY });
+ * useKeySubmitFollowUp(() => handleSubmit(), { scope: Scope.AGENT_CHAT });
  */
-export const useKeySubmitFollowUp = createSemanticHook(Action.SUBMIT_FOLLOW_UP);
+export const useKeySubmitFollowUp = createSemanticHook(
+  Action.SUBMIT_AGENT_CHAT
+);
 
 /**
  * Submit task action - typically Cmd+Enter

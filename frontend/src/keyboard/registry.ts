@@ -7,8 +7,7 @@ export enum Scope {
   SETTINGS = 'settings',
   EDIT_COMMENT = 'edit-comment',
   APPROVALS = 'approvals',
-  FOLLOW_UP = 'follow-up',
-  FOLLOW_UP_READY = 'follow-up-ready',
+  AGENT_CHAT = 'agent-chat',
 }
 
 export enum Action {
@@ -16,7 +15,7 @@ export enum Action {
   CREATE = 'create',
   SUBMIT = 'submit',
   FOCUS_SEARCH = 'focus_search',
-  SUBMIT_FOLLOW_UP = 'submit_follow_up',
+  SUBMIT_AGENT_CHAT = 'submit_agent_chat',
   SUBMIT_TASK = 'submit_task',
   SUBMIT_COMMENT = 'submit_comment',
   CYCLE_VIEW_BACKWARD = 'cycle_view_backward',
@@ -119,9 +118,9 @@ export const keyBindings: KeyBinding[] = [
 
   // Follow-up actions
   {
-    action: Action.SUBMIT_FOLLOW_UP,
+    action: Action.SUBMIT_AGENT_CHAT,
     keys: 'meta+enter',
-    scopes: [Scope.FOLLOW_UP_READY],
+    scopes: [Scope.AGENT_CHAT],
     description: 'Send or queue follow-up (depending on state)',
     group: 'Follow-up',
   },
