@@ -12,13 +12,13 @@ use command_group::AsyncGroupChild;
 use db::{
     DBService,
     models::{
+        draft::{DraftFollowUpData, DraftStore},
         execution_process::{
             ExecutionContext, ExecutionProcess, ExecutionProcessRunReason, ExecutionProcessStatus,
         },
         executor_session::ExecutorSession,
         merge::Merge,
         project::Project,
-        scratch::DraftFollowUpData,
         task::{Task, TaskStatus},
         task_attempt::TaskAttempt,
     },
@@ -436,6 +436,16 @@ impl LocalContainerService {
                         .queued_message_service
                         .take_queued(ctx.task_attempt.id)
                     {
+                        if let Err(e) =
+                            DraftStore::delete_follow_up(&db.pool, ctx.task_attempt.id).await
+                        {
+                            tracing::warn!(
+                                "Failed to clear follow-up draft for queued execution {}: {}",
+                                ctx.task_attempt.id,
+                                e
+                            );
+                        }
+
                         if should_execute_queued {
                             tracing::info!(
                                 "Found queued message for attempt {}, starting follow-up execution",

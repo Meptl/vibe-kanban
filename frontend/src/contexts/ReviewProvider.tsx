@@ -6,12 +6,10 @@ import {
   ReactNode,
   useEffect,
   useCallback,
+  useRef,
 } from 'react';
 import type { DraftReviewCommentData } from 'shared/types';
-import {
-  readFollowUpDraftScratch,
-  writeFollowUpDraftScratch,
-} from '@/lib/followUpDraftScratch';
+import { draftApi } from '@/lib/api';
 import { genId } from '@/utils/id';
 
 export interface ReviewComment {
@@ -73,6 +71,7 @@ export function ReviewProvider({
 }) {
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
+  const loadedAttemptIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setDrafts({});
@@ -82,73 +81,90 @@ export function ReviewProvider({
     if (!attemptId) {
       setComments([]);
       setDrafts({});
+      loadedAttemptIdRef.current = null;
       return;
     }
 
-    const draft = readFollowUpDraftScratch(attemptId);
-    const nextComments =
-      draft?.review_comments.map((comment) => ({
-        id: genId(),
-        filePath: comment.file_path,
-        lineNumber: comment.line_number,
-        side: deserializeSplitSide(comment.side),
-        text: comment.text,
-        ...(comment.code_line ? { codeLine: comment.code_line } : {}),
-      })) ?? [];
-    const nextDrafts = Object.fromEntries(
-      (draft?.review_comment_drafts ?? []).map((comment) => {
-        const side = deserializeSplitSide(comment.side);
-        const key = makeDraftKey(comment.file_path, side, comment.line_number);
-        return [
-          key,
-          {
+    let mounted = true;
+    draftApi
+      .get(attemptId)
+      .then((draft) => {
+        if (!mounted) return;
+        const nextComments =
+          draft?.review_comments.map((comment) => ({
+            id: genId(),
             filePath: comment.file_path,
             lineNumber: comment.line_number,
-            side,
+            side: deserializeSplitSide(comment.side),
             text: comment.text,
             ...(comment.code_line ? { codeLine: comment.code_line } : {}),
-          } satisfies ReviewDraft,
-        ];
+          })) ?? [];
+        const nextDrafts = Object.fromEntries(
+          (draft?.review_comment_drafts ?? []).map((comment) => {
+            const side = deserializeSplitSide(comment.side);
+            const key = makeDraftKey(comment.file_path, side, comment.line_number);
+            return [
+              key,
+              {
+                filePath: comment.file_path,
+                lineNumber: comment.line_number,
+                side,
+                text: comment.text,
+                ...(comment.code_line ? { codeLine: comment.code_line } : {}),
+              } satisfies ReviewDraft,
+            ];
+          })
+        );
+        setComments(nextComments);
+        setDrafts(nextDrafts);
+        loadedAttemptIdRef.current = attemptId;
       })
-    );
+      .catch((error) => {
+        console.error('Failed to load review drafts', error);
+        if (!mounted) return;
+        setComments([]);
+        setDrafts({});
+        loadedAttemptIdRef.current = attemptId;
+      });
 
-    setComments(nextComments);
-    setDrafts(nextDrafts);
+    return () => {
+      mounted = false;
+    };
   }, [attemptId]);
 
   useEffect(() => {
-    if (!attemptId || typeof window === 'undefined') return;
+    if (!attemptId) return;
+    if (loadedAttemptIdRef.current !== attemptId) return;
 
-    try {
-      const existing = readFollowUpDraftScratch(attemptId);
-      writeFollowUpDraftScratch(attemptId, {
-        message: existing?.message ?? '',
-        variant: existing?.variant ?? null,
-        review_comments: comments.map(
-          (comment): DraftReviewCommentData => ({
-            file_path: comment.filePath,
-            line_number: comment.lineNumber,
-            side: serializeSplitSide(comment.side),
-            text: comment.text,
-            code_line: comment.codeLine ?? null,
-          })
-        ),
-        review_comment_drafts: Object.values(drafts).map(
-          (draft): DraftReviewCommentData => ({
-            file_path: draft.filePath,
-            line_number: draft.lineNumber,
-            side: serializeSplitSide(draft.side),
-            text: draft.text,
-            code_line: draft.codeLine ?? null,
-          })
-        ),
-      });
-    } catch (error) {
-      console.error(
-        'Failed to persist review comments and drafts to draft scratch',
-        error
+    const savePromise = draftApi
+      .get(attemptId)
+      .then((existing) =>
+        draftApi.save(attemptId, {
+          message: existing?.message ?? '',
+          variant: existing?.variant ?? null,
+          review_comments: comments.map(
+            (comment): DraftReviewCommentData => ({
+              file_path: comment.filePath,
+              line_number: comment.lineNumber,
+              side: serializeSplitSide(comment.side),
+              text: comment.text,
+              code_line: comment.codeLine ?? null,
+            })
+          ),
+          review_comment_drafts: Object.values(drafts).map(
+            (draft): DraftReviewCommentData => ({
+              file_path: draft.filePath,
+              line_number: draft.lineNumber,
+              side: serializeSplitSide(draft.side),
+              text: draft.text,
+              code_line: draft.codeLine ?? null,
+            })
+          ),
+        })
       );
-    }
+    void savePromise.catch((error) => {
+        console.error('Failed to persist review comments and drafts', error);
+      });
   }, [attemptId, comments, drafts]);
 
   const addComment = (comment: Omit<ReviewComment, 'id'>) => {

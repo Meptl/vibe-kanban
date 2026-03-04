@@ -1,5 +1,6 @@
 pub mod codex_setup;
 pub mod cursor_setup;
+pub mod drafts;
 pub mod images;
 pub mod queue;
 pub mod util;
@@ -16,6 +17,7 @@ use axum::{
     routing::{get, post},
 };
 use db::models::{
+    draft::DraftStore,
     execution_process::{ExecutionProcess, ExecutionProcessRunReason, ExecutionProcessStatus},
     merge::Merge,
     project::{Project, ProjectError},
@@ -456,6 +458,14 @@ pub async fn follow_up(
             &ExecutionProcessRunReason::CodingAgent,
         )
         .await?;
+
+    if let Err(e) = DraftStore::delete_follow_up(&deployment.db().pool, task_attempt.id).await {
+        tracing::warn!(
+            "Failed to clear follow-up draft for attempt {}: {}",
+            task_attempt.id,
+            e
+        );
+    }
 
     Ok(ResponseJson(ApiResponse::success(execution_process)))
 }
@@ -1202,6 +1212,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/", get(get_task_attempts).post(create_task_attempt))
         .nest("/{id}", task_attempt_id_router)
         .nest("/{id}/images", images::router(deployment))
+        .nest("/{id}/draft", drafts::router(deployment))
         .nest("/{id}/queue", queue::router(deployment));
 
     Router::new().nest("/task-attempts", task_attempts_router)

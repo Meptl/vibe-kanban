@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use db::models::scratch::DraftFollowUpData;
+use db::models::draft::DraftFollowUpData;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uuid::Uuid;

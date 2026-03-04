@@ -100,14 +100,14 @@ export function TaskFollowUpSection({
     branchStatus?.conflict_op,
   ]);
 
-  // Editor state (persisted in localStorage)
+  // Editor state (persisted in DB draft storage)
   const {
     draft,
     saveDraft,
     clearDraft,
   } = useFollowUpDraftStorage(selectedAttemptId);
 
-  const scratchData: DraftFollowUpData | undefined = draft ?? undefined;
+  const draftData: DraftFollowUpData | undefined = draft ?? undefined;
 
   // Track whether the follow-up textarea is focused
   const [isTextareaFocused, setIsTextareaFocused] = useState(false);
@@ -138,7 +138,7 @@ export function TaskFollowUpSection({
   const { selectedVariant, setSelectedVariant: setVariantFromHook } =
     useVariant({
       processVariant,
-      scratchVariant: scratchData?.variant,
+      draftVariant: draftData?.variant,
     });
 
   // Ref to track current variant for use in message save callback
@@ -148,25 +148,25 @@ export function TaskFollowUpSection({
   }, [selectedVariant]);
 
   // Refs to stabilize callbacks - avoid re-creating callbacks when these values change
-  const scratchRef = useRef<DraftFollowUpData | undefined>(scratchData);
+  const draftRef = useRef<DraftFollowUpData | undefined>(draftData);
   useEffect(() => {
-    scratchRef.current = scratchData;
-  }, [scratchData]);
+    draftRef.current = draftData;
+  }, [draftData]);
 
   // Save draft helper (used for both message and variant changes)
-  // Uses scratchRef to avoid callback invalidation when draft state updates
-  const saveToScratch = useCallback(
+  // Uses draftRef to avoid callback invalidation when draft state updates
+  const persistDraft = useCallback(
     async (message: string, variant: string | null) => {
       if (!selectedAttemptId) return;
       // Don't create empty draft entries unless one already exists (to allow clearing).
-      if (!message.trim() && !variant && !scratchRef.current) return;
+      if (!message.trim() && !variant && !draftRef.current) return;
       try {
-        saveDraft({
+        await saveDraft({
           message,
           variant,
-          review_comments: scratchRef.current?.review_comments ?? [],
+          review_comments: draftRef.current?.review_comments ?? [],
           review_comment_drafts:
-            scratchRef.current?.review_comment_drafts ?? [],
+            draftRef.current?.review_comment_drafts ?? [],
         });
       } catch (e) {
         console.error('Failed to save follow-up draft', e);
@@ -175,22 +175,22 @@ export function TaskFollowUpSection({
     [selectedAttemptId, saveDraft]
   );
 
-  // Wrapper to update variant and save to localStorage immediately
+  // Wrapper to update variant and persist draft immediately
   const setSelectedVariant = useCallback(
     (variant: string | null) => {
       setVariantFromHook(variant);
       // Save immediately when user changes variant
-      saveToScratch(localMessage, variant);
+      persistDraft(localMessage, variant);
     },
-    [setVariantFromHook, saveToScratch, localMessage]
+    [setVariantFromHook, persistDraft, localMessage]
   );
 
   // Debounced save for message changes (uses current variant from ref)
   const { debounced: setFollowUpMessage, cancel: cancelDebouncedSave } =
     useDebouncedCallback(
       useCallback(
-        (value: string) => saveToScratch(value, variantRef.current),
-        [saveToScratch]
+        (value: string) => persistDraft(value, variantRef.current),
+        [persistDraft]
       ),
       500
     );
@@ -198,8 +198,8 @@ export function TaskFollowUpSection({
   // Sync local message from persisted draft (but not while user is typing)
   useEffect(() => {
     if (isTextareaFocused) return; // Don't overwrite while user is typing
-    setLocalMessage(scratchData?.message ?? '');
-  }, [scratchData?.message, isTextareaFocused]);
+    setLocalMessage(draftData?.message ?? '');
+  }, [draftData?.message, isTextareaFocused]);
 
   // During retry, follow-up box is greyed/disabled (not hidden)
   // Use RetryUi context so optimistic retry immediately disables this box
@@ -239,7 +239,7 @@ export function TaskFollowUpSection({
         clearDraft();
         setLocalMessage('');
       } else {
-        setLocalMessage(scratchData?.message ?? '');
+        setLocalMessage(draftData?.message ?? '');
       }
     }
   }, [
@@ -249,7 +249,7 @@ export function TaskFollowUpSection({
     processes.length,
     refreshQueueStatus,
     clearDraft,
-    scratchData?.message,
+    draftData?.message,
   ]);
 
   // When queued, display the queued message content so user can edit it
@@ -340,7 +340,7 @@ export function TaskFollowUpSection({
     // Cancel any pending debounced save and save immediately before queueing
     // This prevents the race condition where the debounce fires after queueing
     cancelDebouncedSave();
-    await saveToScratch(localMessage, selectedVariant);
+    await persistDraft(localMessage, selectedVariant);
 
     // Combine all the content that would be sent (same as follow-up send)
     const parts = [
@@ -359,7 +359,7 @@ export function TaskFollowUpSection({
     selectedVariant,
     queueMessage,
     cancelDebouncedSave,
-    saveToScratch,
+    persistDraft,
   ]);
 
   // Keyboard shortcut handler - send follow-up or queue depending on state
@@ -434,7 +434,7 @@ export function TaskFollowUpSection({
               const newMessage = prev
                 ? `${prev}\n\n${imageMarkdown}`
                 : imageMarkdown;
-              setFollowUpMessageRef.current(newMessage); // Debounced save to localStorage
+              setFollowUpMessageRef.current(newMessage); // Debounced save to draft storage
               return newMessage;
             });
           }
@@ -473,7 +473,7 @@ export function TaskFollowUpSection({
         cancelQueueRef.current();
       }
       setLocalMessage(value); // Immediate update for UI responsiveness
-      setFollowUpMessageRef.current(value); // Debounced save to localStorage
+      setFollowUpMessageRef.current(value); // Debounced save to draft storage
       if (followUpErrorRef.current) setFollowUpError(null);
     },
     [setFollowUpError]

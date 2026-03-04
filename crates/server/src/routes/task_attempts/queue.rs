@@ -2,7 +2,7 @@ use axum::{
     Extension, Json, Router, extract::State, middleware::from_fn_with_state,
     response::Json as ResponseJson, routing::get,
 };
-use db::models::{scratch::DraftFollowUpData, task_attempt::TaskAttempt};
+use db::models::{draft::DraftFollowUpData, task_attempt::TaskAttempt};
 use local_deployment::Deployment;
 use serde::Deserialize;
 use services::services::queued_message::QueueStatus;

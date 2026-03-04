@@ -48,6 +48,7 @@ import {
   OpenEditorResponse,
   OpenEditorRequest,
   QueueStatus,
+  DraftFollowUpData,
 } from 'shared/types';
 
 export class ApiError<E = unknown> extends Error {
@@ -857,5 +858,27 @@ export const queueApi = {
   getStatus: async (attemptId: string): Promise<QueueStatus> => {
     const response = await makeRequest(`/api/task-attempts/${attemptId}/queue`);
     return handleApiResponse<QueueStatus>(response);
+  },
+};
+
+export const draftApi = {
+  get: async (attemptId: string): Promise<DraftFollowUpData | null> => {
+    const response = await makeRequest(`/api/task-attempts/${attemptId}/draft`);
+    return handleApiResponse<DraftFollowUpData | null>(response);
+  },
+
+  save: async (attemptId: string, draft: DraftFollowUpData): Promise<void> => {
+    const response = await makeRequest(`/api/task-attempts/${attemptId}/draft`, {
+      method: 'PUT',
+      body: JSON.stringify(draft),
+    });
+    return handleApiResponse<void>(response);
+  },
+
+  clear: async (attemptId: string): Promise<void> => {
+    const response = await makeRequest(`/api/task-attempts/${attemptId}/draft`, {
+      method: 'DELETE',
+    });
+    return handleApiResponse<void>(response);
   },
 };
