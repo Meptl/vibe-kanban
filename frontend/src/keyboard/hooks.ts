@@ -52,7 +52,7 @@ export const useKeySubmit = createSemanticHook(Action.SUBMIT);
 export const useKeyFocusSearch = createSemanticHook(Action.FOCUS_SEARCH);
 
 /**
- * Submit follow-up action - typically Cmd+Enter
+ * Submit follow-up action - typically Cmd+Enter / Ctrl+Enter
  * Intelligently sends or queues based on current state (running vs idle)
  *
  * @example
@@ -93,7 +93,7 @@ export const useKeyCycleViewBackward = createSemanticHook(
 
 /**
  * Next notification action - typically 'n'
- * Open and clear the oldest task notification
+ * Open the oldest unread task notification
  *
  * @example
  * useKeyNextNotification(() => resolveNextNotification(), { scope: Scope.KANBAN });

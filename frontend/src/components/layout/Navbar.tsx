@@ -19,6 +19,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { paths } from '@/lib/paths';
 import { OpenInIdeButton } from '@/components/ide/OpenInIdeButton';
 import { TaskNotificationsBell } from '@/components/layout/TaskNotificationsBell';
+import { KeyboardShortcutsHelp } from '@/components/layout/KeyboardShortcutsHelp';
 
 function NavDivider() {
   return (
@@ -133,6 +134,7 @@ export function Navbar() {
             ) : null}
 
             <div className="flex items-center gap-1 shrink-0">
+              <KeyboardShortcutsHelp />
               <TaskNotificationsBell />
               <Button
                 variant="ghost"

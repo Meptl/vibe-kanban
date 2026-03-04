@@ -112,14 +112,14 @@ export const keyBindings: KeyBinding[] = [
     action: Action.NEXT_NOTIFICATION,
     keys: 'n',
     scopes: [Scope.KANBAN, Scope.PROJECTS],
-    description: 'Open and clear oldest notification',
+    description: 'Open oldest unread notification',
     group: 'Navigation',
   },
 
   // Follow-up actions
   {
     action: Action.SUBMIT_AGENT_CHAT,
-    keys: 'meta+enter',
+    keys: ['meta+enter', 'ctrl+enter'],
     scopes: [Scope.AGENT_CHAT],
     description: 'Send or queue follow-up (depending on state)',
     group: 'Follow-up',
