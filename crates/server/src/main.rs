@@ -26,6 +26,15 @@ pub enum VibeKanbanError {
 const CANCELLED_TASK_RETENTION: ChronoDuration = ChronoDuration::hours(1);
 const CANCELLED_TASK_CLEANUP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
+fn env_truthy(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| {
+            let normalized = value.trim().to_ascii_lowercase();
+            matches!(normalized.as_str(), "1" | "true" | "yes" | "on")
+        })
+        .unwrap_or(false)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), VibeKanbanError> {
     let log_level = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string());
@@ -97,7 +106,7 @@ async fn main() -> Result<(), VibeKanbanError> {
 
     tracing::info!("Server running on http://{host}:{actual_port}");
 
-    if !cfg!(debug_assertions) {
+    if !cfg!(debug_assertions) && !env_truthy("DISABLE_BROWSER_OPEN") {
         tracing::info!("Opening browser...");
         tokio::spawn(async move {
             if let Err(e) = open_browser(&format!("http://127.0.0.1:{actual_port}")).await {

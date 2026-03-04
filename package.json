@@ -1,5 +1,8 @@
 {
   "name": "vibe-kanban",
+  "author": {
+    "email": "meptl@meptl.com"
+  },
   "version": "0.0.138",
   "private": true,
   "bin": {
@@ -27,6 +30,7 @@
     "generate-types:check": "cargo run --bin generate_types -- --check",
     "prepare-db": "node scripts/prepare-db.js",
     "prepare-db:check": "node scripts/prepare-db.js --check",
+    "build:electron": "node scripts/build-electron.js",
     "build:npx": "bash ./local-build.sh",
     "prepack": "pnpm run build:npx"
   },
@@ -34,8 +38,10 @@
     "adm-zip": "^0.5.16"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "vite": "^6.3.5"
+    "concurrently": "^9.2.1",
+    "electron": "^40.7.0",
+    "electron-builder": "^26.8.1",
+    "vite": "^7.3.1"
   },
   "engines": {
     "node": ">=18",

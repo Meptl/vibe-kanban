@@ -454,8 +454,92 @@ jobs:
           path: npx-cli/dist/
           retention-days: 1
 
-  create-prerelease:
+  package-electron:
     needs: [bump-version, build-frontend, package-npx-cli]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - name: linux-x64
+            os: ubuntu-latest
+            release_binary: vibe-kanban
+            platform_dir: linux-x64
+            builder_args: --linux
+          - name: windows-x64
+            os: windows-latest
+            release_binary: vibe-kanban.exe
+            platform_dir: windows-x64
+            builder_args: --win
+          - name: macos-arm64
+            os: macos-14
+            release_binary: vibe-kanban
+            platform_dir: macos-arm64
+            builder_args: --mac --arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.bump-version.outputs.new_tag }}
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Download packaged CLI binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: npx-platform-${{ matrix.platform_dir }}
+          path: binaries/
+
+      - name: Extract backend binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path target/release | Out-Null
+          Expand-Archive -Path "binaries/${{ matrix.platform_dir }}/vibe-kanban.zip" -DestinationPath target/release -Force
+          Move-Item -Path "target/release/${{ matrix.release_binary }}" -Destination "target/release/server.exe" -Force
+          Get-ChildItem target/release
+
+      - name: Extract backend binary (non-Windows)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p target/release
+          unzip -o "binaries/${{ matrix.platform_dir }}/vibe-kanban.zip" -d target/release
+          mv "target/release/${{ matrix.release_binary }}" target/release/server
+          chmod +x target/release/server
+          ls -la target/release
+
+      - name: Build Electron package
+        run: pnpm run build:electron -- ${{ matrix.builder_args }}
+        env:
+          SKIP_FRONTEND_BUILD: "1"
+          SKIP_RUST_BUILD: "1"
+
+      - name: Upload Electron artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-platform-${{ matrix.name }}
+          path: dist-electron/
+          retention-days: 1
+
+  create-prerelease:
+    needs: [bump-version, build-frontend, package-npx-cli, package-electron]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -480,6 +564,13 @@ jobs:
           path: binaries/
           merge-multiple: true
 
+      - name: Download Electron packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: electron-platform-*
+          path: electron-binaries/
+          merge-multiple: true
+
       - name: List downloaded binary packages
         run: |
           echo "Downloaded binary zips:"
@@ -493,6 +584,7 @@ jobs:
             cp "binaries/$platform/vibe-kanban-mcp.zip" "release-assets/vibe-kanban-mcp-$platform.zip"
             cp "binaries/$platform/vibe-kanban-review.zip" "release-assets/vibe-kanban-review-$platform.zip"
           done
+          find electron-binaries -maxdepth 1 -type f -exec cp {} release-assets/ \;
 
       - name: Zip frontend
         run: |
