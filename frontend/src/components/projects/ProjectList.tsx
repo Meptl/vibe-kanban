@@ -4,11 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { CreateProject } from 'shared/types';
 import { FolderPickerDialog } from '@/components/dialogs/shared/FolderPickerDialog';
 import { projectsApi } from '@/lib/api';
-import { AlertCircle, Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import ProjectCard from '@/components/projects/ProjectCard.tsx';
 import { useKeyCreate, useKeyNextNotification, Scope } from '@/keyboard';
 import { generateProjectNameFromPath } from '@/utils/string';
@@ -24,6 +23,7 @@ export function ProjectList() {
     isLoading,
     isFetching,
     isError,
+    failureCount,
     refetch,
   } = useProjects();
   const [mutationError, setMutationError] = useState('');
@@ -35,6 +35,8 @@ export function ProjectList() {
     if (isError) return t('errors.fetchFailed');
     return '';
   }, [isError, mutationError, t]);
+
+  const hasInitialLoadFailure = projects.length === 0 && failureCount > 0;
 
   const handleCreateProject = useCallback(async () => {
     try {
@@ -107,25 +109,33 @@ export function ProjectList() {
         </Button>
       </div>
 
-      {errorMessage && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="flex items-center gap-3">
-            <span>{errorMessage}</span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7"
-              onClick={() => void refetch()}
-            >
-              {t('common:buttons.retry')}
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      {mutationError && !hasInitialLoadFailure ? (
+        <p className="text-sm text-destructive">{mutationError}</p>
+      ) : null}
 
-      {isLoading ? (
+      {hasInitialLoadFailure ? (
+        <Card>
+          <CardContent className="py-10 text-center">
+            <p className="text-sm text-destructive">{errorMessage}</p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+              >
+                {t('common:buttons.retry')}
+              </Button>
+              {isFetching ? (
+                <span className="inline-flex items-center text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('loading')}
+                </span>
+              ) : null}
+            </div>
+          </CardContent>
+        </Card>
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           {t('loading')}
@@ -133,7 +143,12 @@ export function ProjectList() {
       ) : isError ? (
         <Card>
           <CardContent className="py-10 text-center">
-            <p className="text-sm text-muted-foreground">{t('errors.fetchFailed')}</p>
+            <p className="text-sm text-destructive">{t('errors.fetchFailed')}</p>
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <Button type="button" size="sm" onClick={() => void refetch()}>
+                {t('common:buttons.retry')}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : projects.length === 0 ? (
@@ -167,7 +182,7 @@ export function ProjectList() {
         </div>
       )}
 
-      {isFetching && !isLoading ? (
+      {isFetching && !isLoading && !hasInitialLoadFailure ? (
         <div className="flex items-center justify-center text-muted-foreground text-sm">
           <Loader2 className="mr-2 h-3 w-3 animate-spin" />
           {t('loading')}
