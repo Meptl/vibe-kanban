@@ -3,6 +3,7 @@ import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 function executorSchemasPlugin(): Plugin {
   const VIRTUAL_ID = "virtual:executor-schemas";
@@ -48,6 +49,26 @@ export default schemas;
   };
 }
 
+function resolveBackendTarget(): string {
+  const host = process.env.HOST || "127.0.0.1";
+  const backendPort = process.env.BACKEND_PORT;
+  if (backendPort) {
+    return `http://${host}:${backendPort}`;
+  }
+
+  const portFilePath = path.join(os.tmpdir(), "vibe-kanban", "vibe-kanban.port");
+  if (fs.existsSync(portFilePath)) {
+    const portFromFile = fs.readFileSync(portFilePath, "utf8").trim();
+    if (/^\d+$/.test(portFromFile)) {
+      return `http://${host}:${portFromFile}`;
+    }
+  }
+
+  return `http://${host}:3001`;
+}
+
+const backendTarget = resolveBackendTarget();
+
 export default defineConfig({
   plugins: [react(), executorSchemasPlugin()],
   resolve: {
@@ -60,7 +81,7 @@ export default defineConfig({
     port: parseInt(process.env.FRONTEND_PORT || "3000"),
     proxy: {
       "/api": {
-        target: `http://localhost:${process.env.BACKEND_PORT || "3001"}`,
+        target: backendTarget,
         changeOrigin: true,
         ws: true,
       }
@@ -69,6 +90,15 @@ export default defineConfig({
       allow: [path.resolve(__dirname, "."), path.resolve(__dirname, "..")],
     },
     open: process.env.VITE_OPEN === "true",
+  },
+  preview: {
+    proxy: {
+      "/api": {
+        target: backendTarget,
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   optimizeDeps: {
     exclude: ["wa-sqlite"],
