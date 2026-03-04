@@ -135,16 +135,11 @@ fn print_help() {
            --http-bind <ADDR>         Advanced: bind address for HTTP transport (overrides --port)\n\
          \n\
          Environment:\n\
-          MCP_TRANSPORT, MCP_HTTP_BIND, VIBE_BACKEND_URL, HOST, BACKEND_PORT, PORT"
+         MCP_TRANSPORT, MCP_HTTP_BIND, HOST, BACKEND_PORT, PORT"
     );
 }
 
 async fn resolve_backend_base_url() -> anyhow::Result<String> {
-    if let Ok(url) = std::env::var("VIBE_BACKEND_URL") {
-        tracing::info!("[MCP] Using backend URL from VIBE_BACKEND_URL: {}", url);
-        return Ok(url);
-    }
-
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
     if let Ok(port_str) = std::env::var("BACKEND_PORT") {
@@ -165,14 +160,14 @@ async fn resolve_backend_base_url() -> anyhow::Result<String> {
             .parse::<u16>()
             .map_err(|e| anyhow::anyhow!("Invalid PORT value '{}': {}", port_str, e))?;
         tracing::warn!(
-            "[MCP] Falling back to generic PORT env var (set BACKEND_PORT or VIBE_BACKEND_URL to avoid ambiguity): {}",
+            "[MCP] Falling back to generic PORT env var (set BACKEND_PORT to avoid ambiguity): {}",
             port
         );
         return Ok(format!("http://{}:{}", host, port));
     }
 
     anyhow::bail!(
-        "Could not resolve backend URL. Set VIBE_BACKEND_URL or BACKEND_PORT, or start vibe-kanban first so the port file is available."
+        "Could not resolve backend URL. Set BACKEND_PORT, or start vibe-kanban first so the port file is available."
     );
 }
 

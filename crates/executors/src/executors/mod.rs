@@ -45,11 +45,6 @@ fn read_vk_backend_port_file() -> Option<u16> {
 }
 
 pub(crate) fn vk_mcp_url_from_env() -> Option<String> {
-    if let Ok(base_url) = std::env::var("VIBE_BACKEND_URL") {
-        let trimmed = base_url.trim_end_matches('/');
-        return Some(format!("{trimmed}/mcp"));
-    }
-
     let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let port = std::env::var("BACKEND_PORT")
         .or_else(|_| std::env::var("PORT"))
