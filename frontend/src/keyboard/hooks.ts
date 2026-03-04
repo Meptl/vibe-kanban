@@ -81,17 +81,6 @@ export const useKeySubmitTask = createSemanticHook(Action.SUBMIT_TASK);
 export const useKeySubmitComment = createSemanticHook(Action.SUBMIT_COMMENT);
 
 /**
- * Cycle view backward action - typically Cmd+Shift+Enter
- * Cycle views backward in attempt area
- *
- * @example
- * useKeyCycleViewBackward(() => cycleBackward(), { scope: Scope.KANBAN });
- */
-export const useKeyCycleViewBackward = createSemanticHook(
-  Action.CYCLE_VIEW_BACKWARD
-);
-
-/**
  * Next notification action - typically 'n'
  * Open the oldest unread task notification
  *

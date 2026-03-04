@@ -42,7 +42,6 @@ import {
   useKeyExit,
   useKeyFocusSearch,
   Scope,
-  useKeyCycleViewBackward,
 } from '@/keyboard';
 
 import TaskKanbanBoard, {
@@ -557,38 +556,6 @@ export function ProjectTasks() {
         (items) => items && items.length > 0
       ),
     [visibleTasksByStatus]
-  );
-
-  /**
-   * Cycle the attempt area view.
-   * Cycles among [attempt, preview, diffs].
-   */
-  const cycleView = useCallback(
-    (direction: 'forward' | 'backward' = 'forward') => {
-      const order: LayoutMode[] = [null, 'preview', 'diffs'];
-      const idx = order.indexOf(mode);
-      const next =
-        direction === 'forward'
-          ? order[(idx + 1) % order.length]
-          : order[(idx - 1 + order.length) % order.length];
-      setMode(next);
-    },
-    [mode, setMode]
-  );
-
-  const cycleViewBackward = useCallback(
-    () => cycleView('backward'),
-    [cycleView]
-  );
-
-  // meta/ctrl+shift+enter → cycle backward
-  useKeyCycleViewBackward(
-    () => {
-      if (isPanelOpen) {
-        cycleViewBackward();
-      }
-    },
-    { scope: Scope.KANBAN, preventDefault: true }
   );
 
   const handleClosePanel = useCallback(() => {

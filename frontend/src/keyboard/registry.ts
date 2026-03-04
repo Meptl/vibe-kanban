@@ -18,7 +18,6 @@ export enum Action {
   SUBMIT_AGENT_CHAT = 'submit_agent_chat',
   SUBMIT_TASK = 'submit_task',
   SUBMIT_COMMENT = 'submit_comment',
-  CYCLE_VIEW_BACKWARD = 'cycle_view_backward',
   NEXT_NOTIFICATION = 'next_notification',
 }
 
@@ -99,13 +98,6 @@ export const keyBindings: KeyBinding[] = [
     keys: 'slash',
     scopes: [Scope.KANBAN],
     description: 'Focus search',
-    group: 'Navigation',
-  },
-  {
-    action: Action.CYCLE_VIEW_BACKWARD,
-    keys: ['meta+shift+enter', 'ctrl+shift+enter'],
-    scopes: [Scope.KANBAN],
-    description: 'Cycle views backward (diffs → preview → attempt)',
     group: 'Navigation',
   },
   {
