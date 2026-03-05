@@ -163,10 +163,6 @@ jobs:
             os: ubuntu-latest
             container: &zigbuild_container ghcr.io/rust-cross/cargo-zigbuild@sha256:af1bc2b869c5d76c1300f7a4685c2f1793d068e6e895c9f5c399b517b31a731e
             name: linux-x64
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            name: linux-arm64
-            container: *zigbuild_container
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             name: windows-x64
@@ -177,9 +173,6 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-14
             name: macos-arm64
-          - target: aarch64-pc-windows-msvc
-            os: windows-latest
-            name: windows-arm64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -317,12 +310,6 @@ jobs:
             binary: vibe-kanban
           - target: aarch64-apple-darwin
             name: macos-arm64
-            binary: vibe-kanban
-          - target: aarch64-pc-windows-msvc
-            name: windows-arm64
-            binary: vibe-kanban.exe
-          - target: aarch64-unknown-linux-musl
-            name: linux-arm64
             binary: vibe-kanban
     steps:
       - uses: actions/checkout@v4
@@ -495,7 +482,7 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          for platform in linux-x64 linux-arm64 windows-x64 windows-arm64 macos-x64 macos-arm64; do
+          for platform in linux-x64 windows-x64 macos-x64 macos-arm64; do
             cp "binaries/$platform/vibe-kanban.zip" "release-assets/npx-vk-bins-$platform.zip"
           done
           find electron-binaries -maxdepth 1 -type f -exec cp {} release-assets/ \;
