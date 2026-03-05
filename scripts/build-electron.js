@@ -37,7 +37,7 @@ function ensureBackendBinaryExists() {
 }
 
 function writeBuilderConfig() {
-  const iconPath = path.join(rootDir, 'docs', 'logo', 'v-384.png');
+  const iconPath = path.join(rootDir, 'docs', 'logo', 'v-768.png');
   const backendPath = backendBinaryPath();
 
   const config = {
