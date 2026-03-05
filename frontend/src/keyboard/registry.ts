@@ -13,7 +13,6 @@ export enum Scope {
 export enum Action {
   EXIT = 'exit',
   CREATE = 'create',
-  SUBMIT = 'submit',
   FOCUS_SEARCH = 'focus_search',
   SUBMIT_AGENT_CHAT = 'submit_agent_chat',
   SUBMIT_TASK = 'submit_task',
@@ -81,15 +80,6 @@ export const keyBindings: KeyBinding[] = [
     scopes: [Scope.PROJECTS],
     description: 'Create new project',
     group: 'Projects',
-  },
-
-  // Submit actions
-  {
-    action: Action.SUBMIT,
-    keys: 'enter',
-    scopes: [Scope.DIALOG],
-    description: 'Submit form or confirm action',
-    group: 'Dialog',
   },
 
   // Navigation actions

@@ -35,15 +35,6 @@ export const useKeyExit = createSemanticHook(Action.EXIT);
 export const useKeyCreate = createSemanticHook(Action.CREATE);
 
 /**
- * Submit action - typically Enter key
- *
- * @example
- * // Submit form in dialog
- * useKeySubmit(() => submitForm(), { scope: Scope.DIALOG });
- */
-export const useKeySubmit = createSemanticHook(Action.SUBMIT);
-
-/**
  * Focus search action - typically '/' key
  *
  * @example

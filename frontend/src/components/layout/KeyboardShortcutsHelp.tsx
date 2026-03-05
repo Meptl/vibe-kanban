@@ -84,7 +84,7 @@ export function KeyboardShortcutsHelp() {
       }
       addBinding({
         description:
-          binding.action === Action.SUBMIT ? 'Submit' : binding.description,
+          binding.description,
         keys: getBindingKeys(binding),
       });
     });

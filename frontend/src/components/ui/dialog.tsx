@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { useHotkeysContext } from 'react-hotkeys-hook';
-import { useKeyExit, useKeySubmit, Scope } from '@/keyboard';
+import { useKeyExit, Scope } from '@/keyboard';
 
 const Dialog = React.forwardRef<
   HTMLDivElement,
@@ -44,50 +44,6 @@ const Dialog = React.forwardRef<
       scope: Scope.DIALOG,
       when: () => !!open,
       enableOnFormTags: true,
-    }
-  );
-
-  useKeySubmit(
-    (e) => {
-      // Don't interfere if user is typing in textarea (allow new lines)
-      const activeElement = document.activeElement as HTMLElement;
-      if (activeElement?.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      // Look for submit button or primary action button within this dialog
-      if (ref && typeof ref === 'object' && ref.current) {
-        // First try to find a submit button
-        const submitButton = ref.current.querySelector(
-          'button[type="submit"]'
-        ) as HTMLButtonElement;
-        if (submitButton && !submitButton.disabled) {
-          e?.preventDefault();
-          submitButton.click();
-          return;
-        }
-
-        // If no submit button, look for primary action button
-        const buttons = Array.from(
-          ref.current.querySelectorAll('button')
-        ) as HTMLButtonElement[];
-        const primaryButton = buttons.find(
-          (btn) =>
-            !btn.disabled &&
-            !btn.textContent?.toLowerCase().includes('cancel') &&
-            !btn.textContent?.toLowerCase().includes('close') &&
-            btn.type !== 'button'
-        );
-
-        if (primaryButton) {
-          e?.preventDefault();
-          primaryButton.click();
-        }
-      }
-    },
-    {
-      scope: Scope.DIALOG,
-      when: () => !!open,
     }
   );
 
