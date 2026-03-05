@@ -103,7 +103,7 @@ async function ensureBinary(platform, binaryName, releaseTag, onProgress) {
 
   fs.mkdirSync(cacheDir, { recursive: true });
 
-  const assetName = `${binaryName}-${platform}.zip`;
+  const assetName = `npx-vk-bins-${platform}.zip`;
   const url = `https://github.com/${GITHUB_REPOSITORY}/releases/download/${releaseTag}/${assetName}`;
   await downloadFile(url, zipPath, null, onProgress);
 

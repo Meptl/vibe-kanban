@@ -496,7 +496,7 @@ jobs:
         run: |
           mkdir -p release-assets
           for platform in linux-x64 linux-arm64 windows-x64 windows-arm64 macos-x64 macos-arm64; do
-            cp "binaries/$platform/vibe-kanban.zip" "release-assets/vibe-kanban-$platform.zip"
+            cp "binaries/$platform/vibe-kanban.zip" "release-assets/npx-vk-bins-$platform.zip"
           done
           find electron-binaries -maxdepth 1 -type f -exec cp {} release-assets/ \;
 
