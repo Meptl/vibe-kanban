@@ -104,6 +104,8 @@ function main() {
     'electron-builder',
     '--config',
     builderConfigPath,
+    '--publish',
+    'never',
     ...builderArgs,
   ]);
 }

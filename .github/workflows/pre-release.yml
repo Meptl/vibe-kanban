@@ -526,7 +526,7 @@ jobs:
           ls -la target/release
 
       - name: Build Electron package
-        run: pnpm run build:electron -- ${{ matrix.builder_args }}
+        run: pnpm run build:electron ${{ matrix.builder_args }}
         env:
           SKIP_FRONTEND_BUILD: "1"
           SKIP_RUST_BUILD: "1"
