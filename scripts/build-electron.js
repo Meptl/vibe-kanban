@@ -8,12 +8,30 @@ const rootDir = path.resolve(__dirname, '..');
 const electronOutDir = path.join(rootDir, 'dist-electron');
 
 function run(cmd, args, options = {}) {
-  const result = spawnSync(cmd, args, {
+  const command =
+    process.platform === 'win32' && cmd === 'pnpm' ? 'pnpm.cmd' : cmd;
+  const renderedCommand = `${command} ${args.join(' ')}`.trim();
+  const result = spawnSync(command, args, {
     cwd: rootDir,
     stdio: 'inherit',
     env: process.env,
     ...options,
   });
+
+  if (result.status !== 0 || result.error || result.signal) {
+    console.error(
+      [
+        `Command failed: ${renderedCommand}`,
+        `status=${String(result.status)}`,
+        `signal=${result.signal ?? 'none'}`,
+        `error=${result.error ? result.error.message : 'none'}`,
+      ].join(' | ')
+    );
+  }
+
+  if (result.error) {
+    process.exit(1);
+  }
 
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
