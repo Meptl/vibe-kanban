@@ -205,7 +205,7 @@ jobs:
           prefix-key: "cache-v1.0"
           key: ${{ matrix.target }}_${{ matrix.os }}
           cache-on-failure: true
-          shared-key: "shared"
+          shared-key: "shared-${{ matrix.target }}"
           cache-all-crates: true
 
       - name: Download frontend artifact
