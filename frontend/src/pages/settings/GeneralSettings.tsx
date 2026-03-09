@@ -4,6 +4,7 @@ import { cloneDeep, merge, isEqual } from 'lodash';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -429,6 +430,69 @@ export function GeneralSettings() {
                 </>
               )}
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle>
+            {t('settings.general.taskCreation.title', {
+              defaultValue: 'Task Creation Guidance',
+            })}
+          </CardTitle>
+          <CardDescription>
+            {t('settings.general.taskCreation.description', {
+              defaultValue:
+                'These descriptions are given to agents when they are tasked with creating tasks in vibe-kanban.',
+            })}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="global-task-title-prompt">
+              {t('settings.general.taskCreation.titlePrompt.label', {
+                defaultValue: 'Title guidance',
+              })}
+            </Label>
+            <Input
+              id="global-task-title-prompt"
+              type="text"
+              value={draft?.task_title_prompt ?? ''}
+              onChange={(e) =>
+                updateDraft({ task_title_prompt: e.target.value || null })
+              }
+              placeholder={t(
+                'settings.general.taskCreation.titlePrompt.placeholder',
+                {
+                  defaultValue: 'Succinct 2-5 word title',
+                }
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="global-task-description-prompt">
+              {t('settings.general.taskCreation.descriptionPrompt.label', {
+                defaultValue: 'Description guidance',
+              })}
+            </Label>
+            <Input
+              id="global-task-description-prompt"
+              type="text"
+              value={draft?.task_description_prompt ?? ''}
+              onChange={(e) =>
+                updateDraft({
+                  task_description_prompt: e.target.value || null,
+                })
+              }
+              placeholder={t(
+                'settings.general.taskCreation.descriptionPrompt.placeholder',
+                {
+                  defaultValue: 'Include scope, constraints, and acceptance criteria.',
+                }
+              )}
+            />
           </div>
         </CardContent>
       </Card>

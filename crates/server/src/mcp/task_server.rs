@@ -23,6 +23,8 @@ use uuid::Uuid;
 
 use crate::routes::{containers::ContainerQuery, task_attempts::CreateTaskAttemptBody};
 
+const CREATE_TASK_TOOL_DESCRIPTION: &str = "Create a new task/ticket in a project.";
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct CreateTaskRequest {
     #[schemars(description = "The ID of the project to create the task in. This is required!")]
@@ -332,6 +334,12 @@ pub struct TaskServer {
     context: Option<McpContext>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct TaskCreationGuidance {
+    title_prompt: Option<String>,
+    description_prompt: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 pub struct McpContext {
     pub project_id: Uuid,
@@ -364,7 +372,60 @@ impl TaskServer {
         }
 
         self.context = context;
+        let guidance = self.load_task_creation_guidance_from_config().await;
+        self.apply_task_creation_guidance_to_create_tool(guidance);
         self
+    }
+
+    async fn load_task_creation_guidance_from_config(&self) -> TaskCreationGuidance {
+        let path = utils::assets::config_path();
+        let config = services::services::config::load_config_from_file(&path).await;
+        TaskCreationGuidance {
+            title_prompt: config.task_title_prompt.and_then(trimmed_non_empty),
+            description_prompt: config.task_description_prompt.and_then(trimmed_non_empty),
+        }
+    }
+
+    fn apply_task_creation_guidance_to_create_tool(&mut self, guidance: TaskCreationGuidance) {
+        let Some(create_task_route) = self.tool_router.map.get_mut("create_task") else {
+            return;
+        };
+
+        let mut description = CREATE_TASK_TOOL_DESCRIPTION.to_string();
+        if let Some(title_prompt) = guidance.title_prompt.as_ref() {
+            description.push_str(&format!(" Title guidance: {}.", title_prompt));
+        }
+        if let Some(description_prompt) = guidance.description_prompt.as_ref() {
+            description.push_str(&format!(" Description guidance: {}.", description_prompt));
+        }
+        create_task_route.attr.description = Some(description.into());
+
+        let mut schema = (*create_task_route.attr.input_schema).clone();
+        if let Some(properties) = schema.get_mut("properties").and_then(|v| v.as_object_mut()) {
+            if let Some(title_schema) = properties.get_mut("title").and_then(|v| v.as_object_mut())
+                && let Some(title_prompt) = guidance.title_prompt.as_ref()
+            {
+                title_schema.insert(
+                    "description".to_string(),
+                    serde_json::Value::String(format!("The title of the task. {}", title_prompt)),
+                );
+            }
+
+            if let Some(desc_schema) = properties
+                .get_mut("description")
+                .and_then(|v| v.as_object_mut())
+                && let Some(description_prompt) = guidance.description_prompt.as_ref()
+            {
+                desc_schema.insert(
+                    "description".to_string(),
+                    serde_json::Value::String(format!(
+                        "Optional description of the task. {}",
+                        description_prompt
+                    )),
+                );
+            }
+        }
+        create_task_route.attr.input_schema = std::sync::Arc::new(schema);
     }
 
     async fn fetch_context_at_startup(&self) -> Option<McpContext> {
@@ -413,6 +474,15 @@ struct ApiResponseEnvelope<T> {
     success: bool,
     data: Option<T>,
     message: Option<String>,
+}
+
+fn trimmed_non_empty(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 impl TaskServer {
@@ -894,6 +964,7 @@ impl TaskServer {
 impl ServerHandler for TaskServer {
     fn get_info(&self) -> ServerInfo {
         let mut instruction = "A task and project management server. If you need to create or update tickets or tasks then use these tools. Most of them absolutely require that you pass the `project_id` of the project that you are currently working on. You can get project ids by using `list projects`. Call `list_tasks` to fetch the `task_ids` of all the tasks in a project`.. TOOLS: 'list_projects', 'list_tasks', 'create_task', 'create_attempt', 'list_attempts', 'get_task_merges', 'get_task', 'get_attempt_diff', 'update_task', 'delete_task'. Make sure to pass `project_id` or `task_id`/`attempt_id` where required. You can use list tools to get the available ids.".to_string();
+
         if self.context.is_some() {
             let context_instruction = "Use 'get_context' to fetch project/task/attempt metadata for the active Vibe Kanban attempt when available.";
             instruction = format!("{} {}", context_instruction, instruction);

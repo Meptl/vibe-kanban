@@ -160,7 +160,7 @@ export type DirectoryEntry = { name: string, path: string, is_directory: boolean
 
 export type DirectoryListResponse = { entries: Array<DirectoryEntry>, current_path: string, };
 
-export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, workspace_dir: string | null, show_new_attempt_drag_warning: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, done_task_cleanup_days: number, };
+export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, workspace_dir: string | null, show_new_attempt_drag_warning: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, done_task_cleanup_days: number, task_title_prompt: string | null, task_description_prompt: string | null, };
 
 export type NotificationConfig = { sound_enabled: boolean, system_enabled: boolean, badge_enabled: boolean, toast_enabled: boolean, sound_file: SoundFile, };
 
