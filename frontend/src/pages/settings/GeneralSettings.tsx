@@ -465,7 +465,7 @@ export function GeneralSettings() {
               placeholder={t(
                 'settings.general.taskCreation.titlePrompt.placeholder',
                 {
-                  defaultValue: 'Succinct 2-5 word title',
+                  defaultValue: 'Succinct 2-5 words',
                 }
               )}
             />
@@ -489,7 +489,7 @@ export function GeneralSettings() {
               placeholder={t(
                 'settings.general.taskCreation.descriptionPrompt.placeholder',
                 {
-                  defaultValue: 'Include scope, constraints, and acceptance criteria.',
+                  defaultValue: 'Do not write tests',
                 }
               )}
             />
