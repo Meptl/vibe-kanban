@@ -55,6 +55,7 @@ export function PreviewPanel() {
   const [showLogs, setShowLogs] = useState(false);
   const [currentPreviewUrl, setCurrentPreviewUrl] = useState<string>();
   const listenerRef = useRef<ClickToComponentListener | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const hasAttemptedAutoStartRef = useRef(false);
 
   const { t } = useTranslation('tasks');
@@ -89,6 +90,51 @@ export function PreviewPanel() {
 
   const effectivePreviewUrl = currentPreviewUrl ?? previewState.url;
 
+  useEffect(() => {
+    if (!effectivePreviewUrl) {
+      return;
+    }
+
+    let expectedOrigin: string | undefined;
+    try {
+      expectedOrigin = new URL(effectivePreviewUrl).origin;
+    } catch {
+      expectedOrigin = undefined;
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (!iframeRef.current?.contentWindow || event.source !== iframeRef.current.contentWindow) {
+        return;
+      }
+
+      if (event.data?.type !== 'VIBE_IFRAME_NAVIGATION') {
+        return;
+      }
+
+      const nextUrl = event.data?.payload?.url;
+      if (typeof nextUrl !== 'string' || !nextUrl) {
+        return;
+      }
+
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(nextUrl);
+      } catch {
+        return;
+      }
+
+      if (expectedOrigin && parsedUrl.origin !== expectedOrigin) {
+        return;
+      }
+
+      const normalized = parsedUrl.toString();
+      setCurrentPreviewUrl((prev) => (prev === normalized ? prev : normalized));
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [effectivePreviewUrl]);
+
   const handleRefresh = () => {
     setIframeError(false);
     setRefreshKey((prev) => prev + 1);
@@ -117,6 +163,9 @@ export function PreviewPanel() {
   const handleIframeLoad = (loadedUrl: string) => {
     setCurrentPreviewUrl((prev) => (prev === loadedUrl ? prev : loadedUrl));
   };
+  const handleIframeRef = useCallback((node: HTMLIFrameElement | null) => {
+    iframeRef.current = node;
+  }, []);
 
   useEffect(() => {
     if (previewState.status !== 'ready' || !previewState.url || !addElement) {
@@ -242,6 +291,7 @@ export function PreviewPanel() {
             <ReadyContent
               url={effectivePreviewUrl}
               iframeKey={`${effectivePreviewUrl}-${refreshKey}`}
+              iframeRef={handleIframeRef}
               onIframeError={handleIframeError}
               onIframeLoad={handleIframeLoad}
             />

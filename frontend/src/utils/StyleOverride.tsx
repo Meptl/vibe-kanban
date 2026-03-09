@@ -19,6 +19,13 @@ interface VibeIframeReadyMessage {
   type: 'VIBE_IFRAME_READY';
 }
 
+interface VibeIframeNavigationMessage {
+  type: 'VIBE_IFRAME_NAVIGATION';
+  payload: {
+    url: string;
+  };
+}
+
 // Component that adds postMessage listener for style overrides
 export function AppWithStyleOverride({
   children,
@@ -76,6 +83,50 @@ export function AppWithStyleOverride({
       const targetOrigin = allowedOrigin || '*';
       window.parent.postMessage(readyMessage, targetOrigin);
     }
+  }, []);
+
+  // Send navigation updates so parent preview toolbars can track SPA routes.
+  useEffect(() => {
+    const allowedOrigin = import.meta.env.VITE_PARENT_ORIGIN;
+
+    if (!window.parent || window.parent === window) {
+      return;
+    }
+
+    const targetOrigin = allowedOrigin || '*';
+    const postNavigation = () => {
+      const navigationMessage: VibeIframeNavigationMessage = {
+        type: 'VIBE_IFRAME_NAVIGATION',
+        payload: {
+          url: window.location.href,
+        },
+      };
+      window.parent.postMessage(navigationMessage, targetOrigin);
+    };
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function pushStateProxy(...args) {
+      originalPushState.apply(window.history, args);
+      postNavigation();
+    };
+
+    window.history.replaceState = function replaceStateProxy(...args) {
+      originalReplaceState.apply(window.history, args);
+      postNavigation();
+    };
+
+    window.addEventListener('popstate', postNavigation);
+    window.addEventListener('hashchange', postNavigation);
+    postNavigation();
+
+    return () => {
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener('popstate', postNavigation);
+      window.removeEventListener('hashchange', postNavigation);
+    };
   }, []);
 
   return <>{children}</>;

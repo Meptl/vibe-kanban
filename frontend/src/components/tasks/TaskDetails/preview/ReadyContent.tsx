@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 interface ReadyContentProps {
   url?: string;
   iframeKey: string;
+  iframeRef?: (node: HTMLIFrameElement | null) => void;
   onIframeError: () => void;
   onIframeLoad?: (url: string) => void;
 }
@@ -10,6 +11,7 @@ interface ReadyContentProps {
 export function ReadyContent({
   url,
   iframeKey,
+  iframeRef,
   onIframeError,
   onIframeLoad,
 }: ReadyContentProps) {
@@ -18,6 +20,7 @@ export function ReadyContent({
   return (
     <div className="flex-1">
       <iframe
+        ref={iframeRef}
         key={iframeKey}
         src={url}
         title={t('preview.iframe.title')}
