@@ -75,7 +75,10 @@ export function SettingsLayout() {
     navigate('/projects', { replace: true });
   };
   // Register ESC keyboard shortcut
-  useKeyExit(handleBack, { scope: Scope.SETTINGS });
+  useKeyExit(handleBack, {
+    scope: Scope.SETTINGS,
+    enableOnFormTags: true,
+  });
 
   return (
     <div className="h-full overflow-auto">
