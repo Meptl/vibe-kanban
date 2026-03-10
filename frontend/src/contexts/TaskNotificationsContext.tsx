@@ -212,6 +212,7 @@ export function TaskNotificationsProvider({
       const create = () => {
         const browserNotification = new Notification(title);
         browserNotification.onclick = () => {
+          window.vibeKanban?.focusAppWindow();
           window.focus();
           navigate(paths.task(notification.projectId, notification.taskId));
         };

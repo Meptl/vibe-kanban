@@ -1,9 +1,20 @@
-const { app, BrowserWindow, dialog, Menu } = require('electron');
+const { app, BrowserWindow, dialog, Menu, ipcMain } = require('electron');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 
 let backendProcess = null;
 let mainWindow = null;
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  mainWindow.focus();
+}
 
 function backendBinaryName() {
   return process.platform === 'win32' ? 'server.exe' : 'server';
@@ -107,6 +118,10 @@ app.on('before-quit', () => {
 });
 
 app.whenReady().then(bootstrap);
+
+ipcMain.on('app:focus-main-window', () => {
+  focusMainWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
