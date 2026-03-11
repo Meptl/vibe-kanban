@@ -252,7 +252,7 @@ export function TaskFollowUpSection({
     draftData?.message,
   ]);
 
-  // When queued, display the queued message content so user can edit it
+  // When queued, display the queued message content in read-only mode
   const displayMessage =
     isQueued && queuedMessage ? queuedMessage.data.message : localMessage;
 
@@ -295,7 +295,7 @@ export function TaskFollowUpSection({
 
     if (isRetryActive) return false; // disable typing while retry editor is active
     if (hasPendingApproval) return false; // disable typing during approval
-    // Note: isQueued no longer blocks typing - editing auto-cancels the queue
+    if (isQueued) return false; // disable editing while a queued message exists
     return true;
   }, [
     selectedAttemptId,
@@ -303,6 +303,7 @@ export function TaskFollowUpSection({
     isSendingFollowUp,
     isRetryActive,
     hasPendingApproval,
+    isQueued,
   ]);
 
   const canSendFollowUp = useMemo(() => {
@@ -465,13 +466,18 @@ export function TaskFollowUpSection({
     [handlePasteFiles]
   );
 
+  const handleCancelQueue = useCallback(async () => {
+    if (queuedMessage) {
+      const queuedText = queuedMessage.data.message;
+      setLocalMessage(queuedText);
+      setFollowUpMessageRef.current(queuedText);
+    }
+    await cancelQueue();
+  }, [queuedMessage, cancelQueue]);
+
   // Stable onChange handler for the follow-up editor
   const handleEditorChange = useCallback(
     (value: string) => {
-      // Auto-cancel queue when user starts editing
-      if (isQueuedRef.current) {
-        cancelQueueRef.current();
-      }
       setLocalMessage(value); // Immediate update for UI responsiveness
       setFollowUpMessageRef.current(value); // Debounced save to draft storage
       if (followUpErrorRef.current) setFollowUpError(null);
@@ -623,7 +629,7 @@ export function TaskFollowUpSection({
                 value={displayMessage}
                 onChange={handleEditorChange}
                 onPasteFiles={handlePasteFiles}
-                disabled={!isEditable}
+                disabled={!isEditable || isQueued}
                 className="w-full min-h-[120px] bg-transparent resize-y outline-none font-mono text-sm leading-relaxed border rounded-md p-3"
                 projectId={projectId}
                 onCmdEnter={() => handleSubmitShortcut()}
@@ -673,7 +679,7 @@ export function TaskFollowUpSection({
               {/* Queue/Cancel Queue button when running */}
               {isQueued ? (
                 <Button
-                  onClick={cancelQueue}
+                  onClick={handleCancelQueue}
                   disabled={isQueueLoading}
                   size="sm"
                   variant="outline"
