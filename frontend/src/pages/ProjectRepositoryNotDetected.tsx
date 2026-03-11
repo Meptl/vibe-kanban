@@ -1,18 +1,71 @@
-import { AlertTriangle, ArrowLeft, RefreshCw, Settings } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useProject } from '@/contexts/ProjectContext';
 import { paths } from '@/lib/paths';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { projectsApi } from '@/lib/api';
+import { useProjectMutations } from '@/hooks/useProjectMutations';
+import { isUnderlyingRepoNotDetectedError } from '@/lib/repositoryErrors';
 
 export function ProjectRepositoryNotDetected() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const { project } = useProject();
+  const [repoPathDraft, setRepoPathDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { updateProject } = useProjectMutations();
+
+  useEffect(() => {
+    if (!project?.git_repo_path) return;
+    setRepoPathDraft(project.git_repo_path);
+  }, [project?.git_repo_path]);
 
   if (!projectId) {
     return <Navigate to={paths.projects()} replace />;
   }
+
+  const handleTryAgain = async () => {
+    const nextPath = repoPathDraft.trim();
+    if (!nextPath) {
+      setError('Repository path is required.');
+      return;
+    }
+
+    setError(null);
+
+    try {
+      if (project && nextPath !== project.git_repo_path) {
+        await updateProject.mutateAsync({
+          projectId,
+          data: {
+            name: project.name,
+            git_repo_path: nextPath,
+            setup_script: project.setup_script ?? null,
+            dev_script: project.dev_script ?? null,
+            cleanup_script: project.cleanup_script ?? null,
+            copy_files: project.copy_files ?? null,
+            parallel_setup_script: project.parallel_setup_script ?? null,
+          },
+        });
+      }
+
+      await projectsApi.getBranches(projectId);
+      navigate(paths.projectTasks(projectId), { replace: true });
+    } catch (retryError) {
+      if (isUnderlyingRepoNotDetectedError(retryError)) {
+        setError(
+          'Repository still not detected. Check the path and make sure it points to a valid local git repository.'
+        );
+        return;
+      }
+
+      setError((retryError as Error)?.message || 'Failed to validate repository path.');
+    }
+  };
 
   return (
     <div className="h-full w-full flex items-center justify-center p-6">
@@ -29,31 +82,24 @@ export function ProjectRepositoryNotDetected() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm">
-            Update the repository path in Project Settings, then return to this
-            project.
+            Update the repository path here, then press Try Again.
           </p>
-          {project?.git_repo_path ? (
-            <div className="rounded-md border bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Current path</p>
-              <p className="text-sm break-all">{project.git_repo_path}</p>
-            </div>
-          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="repo-path-inline">Repository path</Label>
+            <Input
+              id="repo-path-inline"
+              value={repoPathDraft}
+              onChange={(e) => setRepoPathDraft(e.target.value)}
+              placeholder="/path/to/your/existing/repo"
+              disabled={updateProject.isPending}
+            />
+          </div>
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() =>
-                navigate(`/settings/projects?projectId=${projectId}`, {
-                  state: {
-                    settingsFrom: `/projects/${projectId}/repository-not-detected`,
-                  },
-                })
-              }
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Open Project Settings
-            </Button>
-            <Button
               variant="outline"
-              onClick={() => navigate(paths.projectTasks(projectId))}
+              onClick={() => void handleTryAgain()}
+              disabled={updateProject.isPending}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Try Again

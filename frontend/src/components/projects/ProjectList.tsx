@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import type { CreateProject } from 'shared/types';
+import type { CreateProject, Project } from 'shared/types';
 import { FolderPickerDialog } from '@/components/dialogs/shared/FolderPickerDialog';
 import { projectsApi } from '@/lib/api';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
@@ -13,6 +13,10 @@ import { useKeyCreate, useKeyNextNotification, Scope } from '@/keyboard';
 import { generateProjectNameFromPath } from '@/utils/string';
 import { useProjects } from '@/hooks/useProjects';
 import { useTaskNotifications } from '@/contexts/TaskNotificationsContext';
+import { paths } from '@/lib/paths';
+import { isUnderlyingRepoNotDetectedError } from '@/lib/repositoryErrors';
+
+type RepositoryStatus = 'checking' | 'detected' | 'missing' | 'unknown';
 
 export function ProjectList() {
   const navigate = useNavigate();
@@ -28,6 +32,9 @@ export function ProjectList() {
   } = useProjects();
   const [mutationError, setMutationError] = useState('');
   const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
+  const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
+  const [repositoryStatusByProjectId, setRepositoryStatusByProjectId] =
+    useState<Record<string, RepositoryStatus>>({});
   const { resolveNextNotification } = useTaskNotifications();
 
   const errorMessage = useMemo(() => {
@@ -95,6 +102,90 @@ export function ProjectList() {
       setFocusedProjectId(projects[0].id);
     }
   }, [projects, focusedProjectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setRepositoryStatusByProjectId((prev) => {
+      const next: Record<string, RepositoryStatus> = {};
+
+      projects.forEach((project) => {
+        next[project.id] = prev[project.id] ?? 'checking';
+      });
+
+      return next;
+    });
+
+    const checkProject = async (project: Project) => {
+      try {
+        await projectsApi.getBranches(project.id);
+        if (cancelled) return;
+        setRepositoryStatusByProjectId((prev) => ({
+          ...prev,
+          [project.id]: 'detected',
+        }));
+      } catch (error) {
+        if (cancelled) return;
+        setRepositoryStatusByProjectId((prev) => ({
+          ...prev,
+          [project.id]: isUnderlyingRepoNotDetectedError(error)
+            ? 'missing'
+            : 'unknown',
+        }));
+      }
+    };
+
+    projects.forEach((project) => {
+      void checkProject(project);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projects]);
+
+  const handleOpenProject = useCallback(
+    async (project: Project) => {
+      setMutationError('');
+      setOpeningProjectId(project.id);
+
+      try {
+        const cachedStatus = repositoryStatusByProjectId[project.id];
+
+        if (cachedStatus === 'missing') {
+          navigate(paths.projectRepositoryNotDetected(project.id));
+          return;
+        }
+
+        if (cachedStatus === 'detected') {
+          navigate(paths.projectTasks(project.id));
+          return;
+        }
+
+        await projectsApi.getBranches(project.id);
+        setRepositoryStatusByProjectId((prev) => ({
+          ...prev,
+          [project.id]: 'detected',
+        }));
+        navigate(paths.projectTasks(project.id));
+      } catch (error) {
+        if (isUnderlyingRepoNotDetectedError(error)) {
+          setRepositoryStatusByProjectId((prev) => ({
+            ...prev,
+            [project.id]: 'missing',
+          }));
+          navigate(paths.projectRepositoryNotDetected(project.id));
+          return;
+        }
+
+        console.error('Failed to open project:', error);
+        setMutationError('Failed to validate repository path');
+      } finally {
+        setOpeningProjectId((current) => (current === project.id ? null : current));
+      }
+    },
+    [navigate, repositoryStatusByProjectId]
+  );
 
   return (
     <div className="space-y-6 p-8 pb-16 md:pb-8 h-full overflow-auto">
@@ -177,8 +268,11 @@ export function ProjectList() {
               project={project}
               isFocused={focusedProjectId === project.id}
               setError={setMutationError}
+              onOpen={() => void handleOpenProject(project)}
               onEdit={() => handleEditProject(project.id)}
               fetchProjects={() => void refetch()}
+              repositoryStatus={repositoryStatusByProjectId[project.id]}
+              isOpening={openingProjectId === project.id}
             />
           ))}
         </div>

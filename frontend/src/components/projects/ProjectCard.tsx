@@ -16,14 +16,17 @@ import {
   Edit,
   FolderOpen,
   MoreHorizontal,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { Project } from 'shared/types';
 import { useEffect, useRef } from 'react';
 import { useOpenProjectInEditor } from '@/hooks/useOpenProjectInEditor';
-import { useNavigateWithSearch } from '@/hooks';
 import { projectsApi } from '@/lib/api';
 import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
+
+type RepositoryStatus = 'checking' | 'detected' | 'missing' | 'unknown';
 
 type Props = {
   project: Project;
@@ -31,6 +34,9 @@ type Props = {
   fetchProjects: () => void;
   setError: (error: string) => void;
   onEdit: () => void;
+  onOpen: () => void;
+  repositoryStatus?: RepositoryStatus;
+  isOpening?: boolean;
 };
 
 function ProjectCard({
@@ -39,8 +45,10 @@ function ProjectCard({
   fetchProjects,
   setError,
   onEdit,
+  onOpen,
+  repositoryStatus = 'unknown',
+  isOpening = false,
 }: Props) {
-  const navigate = useNavigateWithSearch();
   const ref = useRef<HTMLDivElement>(null);
   const handleOpenInEditor = useOpenProjectInEditor(project);
   const { t } = useTranslation('projects');
@@ -80,13 +88,21 @@ function ProjectCard({
   return (
     <Card
       className={`hover:shadow-md transition-shadow cursor-pointer focus:ring-2 focus:ring-primary outline-none border`}
-      onClick={() => navigate(`/projects/${project.id}/tasks`)}
+      onClick={() => onOpen()}
       tabIndex={isFocused ? 0 : -1}
       ref={ref}
     >
       <CardHeader>
         <div className="flex items-start justify-between">
-          <CardTitle className="text-lg">{project.name}</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-lg">{project.name}</CardTitle>
+            {repositoryStatus === 'missing' ? (
+              <Badge variant="destructive">Repo missing</Badge>
+            ) : null}
+            {repositoryStatus === 'checking' || isOpening ? (
+              <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
+            ) : null}
+          </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

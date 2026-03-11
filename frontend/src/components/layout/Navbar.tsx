@@ -39,7 +39,11 @@ export function Navbar() {
   const isProjectTaskRoute = /^\/projects\/[^/]+\/tasks(?:\/.*)?$/.test(
     location.pathname
   );
-  const { data: projects = [] } = useProjects({ enabled: isProjectTaskRoute });
+  const isProjectRepositoryMissingRoute =
+    /^\/projects\/[^/]+\/repository-not-detected$/.test(location.pathname);
+  const isProjectScopedRoute =
+    isProjectTaskRoute || isProjectRepositoryMissingRoute;
+  const { data: projects = [] } = useProjects({ enabled: isProjectScopedRoute });
   const handleOpenInEditor = useOpenProjectInEditor(project || null);
 
   const projectSwitchValue =
@@ -77,7 +81,7 @@ export function Navbar() {
             <Link to="/projects">
               <Logo />
             </Link>
-            {isProjectTaskRoute ? (
+            {isProjectScopedRoute ? (
               <Select
                 value={projectSwitchValue}
                 onValueChange={handleProjectChange}
