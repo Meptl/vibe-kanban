@@ -1,4 +1,9 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom';
 import { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Settings, Plus } from 'lucide-react';
@@ -34,8 +39,10 @@ function NavDivider() {
 export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { projectId, project } = useProject();
   const { query, setQuery, active, clear, registerInputRef } = useSearch();
+  const isSettingsRoute = location.pathname.startsWith('/settings');
   const isProjectTaskRoute = /^\/projects\/[^/]+\/tasks(?:\/.*)?$/.test(
     location.pathname
   );
@@ -43,12 +50,16 @@ export function Navbar() {
     /^\/projects\/[^/]+\/repository-not-detected$/.test(location.pathname);
   const isProjectScopedRoute =
     isProjectTaskRoute || isProjectRepositoryMissingRoute;
-  const { data: projects = [] } = useProjects({ enabled: isProjectScopedRoute });
+  const showProjectSwitcher = isProjectScopedRoute || isSettingsRoute;
+  const { data: projects = [] } = useProjects({ enabled: showProjectSwitcher });
   const handleOpenInEditor = useOpenProjectInEditor(project || null);
+  const settingsProjectId = searchParams.get('projectId');
+  const selectedProjectId = isSettingsRoute ? settingsProjectId : projectId;
 
   const projectSwitchValue =
-    projectId && projects.some((entry) => entry.id === projectId)
-      ? projectId
+    selectedProjectId &&
+    projects.some((entry) => entry.id === selectedProjectId)
+      ? selectedProjectId
       : undefined;
 
   const setSearchBarRef = useCallback(
@@ -69,7 +80,7 @@ export function Navbar() {
   };
 
   const handleProjectChange = (nextProjectId: string) => {
-    if (nextProjectId === projectId) return;
+    if (nextProjectId === selectedProjectId) return;
     navigate(paths.projectTasks(nextProjectId));
   };
 
@@ -81,7 +92,7 @@ export function Navbar() {
             <Link to="/projects">
               <Logo />
             </Link>
-            {isProjectScopedRoute ? (
+            {showProjectSwitcher ? (
               <Select
                 value={projectSwitchValue}
                 onValueChange={handleProjectChange}
