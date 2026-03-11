@@ -3,7 +3,7 @@
   "author": {
     "email": "meptl@meptl.com"
   },
-  "version": "0.0.140",
+  "version": "0.0.141",
   "private": true,
   "bin": {
     "vibe-kanban": "npx-cli/bin/cli.js"
