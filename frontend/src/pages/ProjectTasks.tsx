@@ -884,6 +884,7 @@ export function ProjectTasks() {
             image_ids: null,
           });
 
+        clearTaskNotifications(task.project_id, task.id);
         await updateTaskStatus();
 
         if (shouldStopAgent) {
@@ -1000,6 +1001,7 @@ export function ProjectTasks() {
       branches,
       config?.executor_profile,
       config?.show_new_attempt_drag_warning,
+      clearTaskNotifications,
       projectId,
       t,
       tasksById,
