@@ -103,7 +103,6 @@ export function TaskFollowUpSection({
   // Editor state (persisted in DB draft storage)
   const {
     draft,
-    isLoading: isDraftLoading,
     saveDraft,
     clearDraft,
   } = useFollowUpDraftStorage(selectedAttemptId);
@@ -196,20 +195,11 @@ export function TaskFollowUpSection({
       500
     );
 
-  // Hydrate local message from persisted draft once per selected attempt.
-  const hydratedAttemptRef = useRef<string | null>(null);
+  // Sync local message from persisted draft (but not while user is typing)
   useEffect(() => {
-    if (!selectedAttemptId) {
-      hydratedAttemptRef.current = null;
-      setLocalMessage('');
-      return;
-    }
-    if (hydratedAttemptRef.current === selectedAttemptId) return;
-    if (isDraftLoading) return;
-
+    if (isTextareaFocused) return; // Don't overwrite while user is typing
     setLocalMessage(draftData?.message ?? '');
-    hydratedAttemptRef.current = selectedAttemptId;
-  }, [selectedAttemptId, isDraftLoading, draftData?.message]);
+  }, [draftData?.message, isTextareaFocused]);
 
   // During retry, follow-up box is greyed/disabled (not hidden)
   // Use RetryUi context so optimistic retry immediately disables this box
