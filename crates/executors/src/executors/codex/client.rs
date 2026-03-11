@@ -7,17 +7,17 @@ use std::{
 
 use async_trait::async_trait;
 use codex_app_server_protocol::{
-    ApplyPatchApprovalResponse, ApprovalDecision, ClientInfo, ClientNotification, ClientRequest,
+    ApplyPatchApprovalResponse, ApprovalDecision, ClientNotification, ClientRequest,
     CommandExecutionRequestApprovalResponse, ExecCommandApprovalResponse,
     FileChangeRequestApprovalResponse, GetAuthStatusParams, GetAuthStatusResponse,
-    InitializeParams, InitializeResponse, JSONRPCError, JSONRPCNotification, JSONRPCRequest,
-    JSONRPCResponse, RequestId, ServerNotification, ServerRequest, ThreadResumeParams,
+    InitializeResponse, JSONRPCError, JSONRPCNotification, JSONRPCRequest, JSONRPCResponse,
+    RequestId, ServerNotification, ServerRequest, ThreadResumeParams,
     ThreadResumeResponse, ThreadStartParams, ThreadStartResponse, TurnStartParams,
     TurnStartResponse, UserInput,
 };
 use codex_protocol::protocol::ReviewDecision;
 use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{self, Value};
+use serde_json::{self, Value, json};
 use tokio::{
     io::{AsyncWrite, AsyncWriteExt, BufWriter},
     sync::Mutex,
@@ -64,18 +64,23 @@ impl AppServerClient {
     }
 
     pub async fn initialize(&self) -> Result<(), ExecutorError> {
-        let request = ClientRequest::Initialize {
-            request_id: self.next_request_id(),
-            params: InitializeParams {
-                client_info: ClientInfo {
-                    name: "vibe-codex-executor".to_string(),
-                    title: None,
-                    version: env!("CARGO_PKG_VERSION").to_string(),
+        let request_id = self.next_request_id();
+        let request = JSONRPCRequest {
+            id: request_id.clone(),
+            method: "initialize".to_string(),
+            params: Some(json!({
+                "clientInfo": {
+                    "name": "vibe-codex-executor",
+                    "version": env!("CARGO_PKG_VERSION"),
                 },
-            },
+                "capabilities": {
+                    "experimentalApi": true,
+                }
+            })),
         };
 
-        self.send_request::<InitializeResponse>(request, "initialize")
+        self.rpc()
+            .request::<InitializeResponse, _>(request_id, &request, "initialize")
             .await?;
         self.send_message(&ClientNotification::Initialized).await
     }
