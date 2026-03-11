@@ -73,6 +73,7 @@ const UserMessage = ({
             <WYSIWYGEditor
               value={displayContent}
               disabled
+              disableHighlightSyntax
               className="whitespace-pre-wrap break-words flex flex-col gap-1 font-light"
               taskAttemptId={taskAttempt?.id}
               onEdit={canRetry ? startRetry : undefined}

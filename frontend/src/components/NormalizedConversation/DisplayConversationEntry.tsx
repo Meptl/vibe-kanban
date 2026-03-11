@@ -298,6 +298,7 @@ const CollapsibleEntry: React.FC<{
         <WYSIWYGEditor
           value={content}
           disabled
+          disableHighlightSyntax
           className="whitespace-pre-wrap break-words"
           taskAttemptId={taskAttemptId}
         />
@@ -314,6 +315,7 @@ const CollapsibleEntry: React.FC<{
         <WYSIWYGEditor
           value={firstLine}
           disabled
+          disableHighlightSyntax
           className="whitespace-pre-wrap break-words"
           taskAttemptId={taskAttemptId}
         />
@@ -433,6 +435,7 @@ const PlanPresentationCard: React.FC<{
               <WYSIWYGEditor
                 value={plan}
                 disabled
+                disableHighlightSyntax
                 className="whitespace-pre-wrap break-words"
                 taskAttemptId={taskAttemptId}
               />
@@ -578,6 +581,7 @@ const ToolCallCard: React.FC<{
                         <WYSIWYGEditor
                           value={actionType.result.value?.toString()}
                           disabled
+                          disableHighlightSyntax
                           taskAttemptId={taskAttemptId}
                         />
                       )}
@@ -698,6 +702,7 @@ function DisplayConversationEntry({
           <WYSIWYGEditor
             value={entry.content}
             disabled
+            disableHighlightSyntax
             className="whitespace-pre-wrap break-words flex flex-col gap-1 font-light py-3"
             taskAttemptId={taskAttempt?.id}
           />
@@ -831,6 +836,7 @@ function DisplayConversationEntry({
           <WYSIWYGEditor
             value={isNormalizedEntry(entry) ? entry.content : ''}
             disabled
+            disableHighlightSyntax
             className="whitespace-pre-wrap break-words flex flex-col gap-1 font-light"
             taskAttemptId={taskAttempt?.id}
           />

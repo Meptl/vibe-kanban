@@ -61,6 +61,8 @@ type WysiwygProps = {
   onDelete?: () => void;
   /** Auto-focus the editor on mount */
   autoFocus?: boolean;
+  /** Disable ==highlight== markdown parsing while keeping other markdown behavior */
+  disableHighlightSyntax?: boolean;
 };
 
 function WYSIWYGEditor({
@@ -80,6 +82,7 @@ function WYSIWYGEditor({
   onEdit,
   onDelete,
   autoFocus = false,
+  disableHighlightSyntax = false,
 }: WysiwygProps) {
   const initialConfig = useMemo(
     () => ({
@@ -136,6 +139,14 @@ function WYSIWYGEditor({
     []
   );
 
+  const activeTransformers: Transformer[] = useMemo(() => {
+    if (!disableHighlightSyntax) return extendedTransformers;
+
+    return extendedTransformers.filter(
+      (transformer) => !('tag' in transformer && transformer.tag === '==')
+    );
+  }, [disableHighlightSyntax, extendedTransformers]);
+
   // Memoized handlers for ContentEditable to prevent re-renders
   const handlePaste = useCallback(
     (event: React.ClipboardEvent) => {
@@ -177,7 +188,7 @@ function WYSIWYGEditor({
                 onChange={onChange}
                 onEditorStateChange={onEditorStateChange}
                 editable={!disabled}
-                transformers={extendedTransformers}
+                transformers={activeTransformers}
               />
               {!disabled && <ToolbarPlugin />}
               <div className="relative">
@@ -207,8 +218,8 @@ function WYSIWYGEditor({
                 <>
                   {autoFocus && <AutoFocusPlugin />}
                   <HistoryPlugin />
-                  <MarkdownShortcutPlugin transformers={extendedTransformers} />
-                  <PasteMarkdownPlugin transformers={extendedTransformers} />
+                  <MarkdownShortcutPlugin transformers={activeTransformers} />
+                  <PasteMarkdownPlugin transformers={activeTransformers} />
                   <FileTagTypeaheadPlugin projectId={projectId} />
                   <KeyboardCommandsPlugin
                     onCmdEnter={onCmdEnter}
