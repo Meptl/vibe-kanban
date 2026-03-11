@@ -9,9 +9,8 @@ use std::{
 };
 
 use async_trait::async_trait;
-use codex_app_server_protocol::NewConversationParams;
-use codex_protocol::{
-    config_types::SandboxMode as CodexSandboxMode, protocol::AskForApproval as CodexAskForApproval,
+use codex_app_server_protocol::{
+    AskForApproval as CodexAskForApproval, SandboxMode as CodexSandboxMode, ThreadStartParams,
 };
 use command_group::AsyncCommandGroup;
 use derivative::Derivative;
@@ -221,7 +220,7 @@ impl StandardCodingAgentExecutor for Codex {
 
 impl Codex {
     pub fn base_command() -> &'static str {
-        "npx -y @openai/codex@0.107.0"
+        "npx -y @openai/codex@0.112.0"
     }
 
     pub fn base_command_builder() -> CommandBuilder {
@@ -239,7 +238,7 @@ impl Codex {
         apply_overrides(builder, &self.cmd)
     }
 
-    fn build_new_conversation_params(&self, cwd: &Path) -> NewConversationParams {
+    fn build_thread_start_params(&self, cwd: &Path) -> ThreadStartParams {
         let sandbox = match self.sandbox.as_ref() {
             None | Some(SandboxMode::Auto) => Some(CodexSandboxMode::WorkspaceWrite), // match the Auto preset in codex
             Some(SandboxMode::ReadOnly) => Some(CodexSandboxMode::ReadOnly),
@@ -259,17 +258,14 @@ impl Codex {
             Some(AskForApproval::Never) => Some(CodexAskForApproval::Never),
         };
 
-        NewConversationParams {
+        ThreadStartParams {
             model: self.model.clone(),
-            profile: self.profile.clone(),
+            model_provider: self.model_provider.clone(),
             cwd: Some(cwd.to_string_lossy().to_string()),
             approval_policy,
             sandbox,
             config: self.build_config_overrides(),
             base_instructions: self.base_instructions.clone(),
-            include_apply_patch_tool: self.include_apply_patch_tool,
-            model_provider: self.model_provider.clone(),
-            compact_prompt: self.compact_prompt.clone(),
             developer_instructions: self.developer_instructions.clone(),
         }
     }
@@ -346,7 +342,7 @@ impl Codex {
         let new_stdout = create_stdout_pipe_writer(&mut child)?;
         let (exit_signal_tx, exit_signal_rx) = tokio::sync::oneshot::channel();
 
-        let params = self.build_new_conversation_params(current_dir);
+        let params = self.build_thread_start_params(current_dir);
         let resume_session = resume_session.map(|s| s.to_string());
         let auto_approve = matches!(
             (&self.sandbox, &self.ask_for_approval),
@@ -411,7 +407,7 @@ impl Codex {
 
     #[allow(clippy::too_many_arguments)]
     async fn launch_codex_app_server(
-        conversation_params: NewConversationParams,
+        conversation_params: ThreadStartParams,
         resume_session: Option<String>,
         combined_prompt: String,
         child_stdout: tokio::process::ChildStdout,
@@ -435,13 +431,10 @@ impl Codex {
         match resume_session {
             None => {
                 let params = conversation_params;
-                let response = client.new_conversation(params).await?;
-                let conversation_id = response.conversation_id;
-                client.register_session(&conversation_id).await?;
-                client.add_conversation_listener(conversation_id).await?;
-                client
-                    .send_user_message(conversation_id, combined_prompt)
-                    .await?;
+                let response = client.thread_start(params).await?;
+                let thread_id = response.thread.id;
+                client.register_session(thread_id.clone()).await?;
+                client.turn_start(thread_id, combined_prompt).await?;
             }
             Some(session_id) => {
                 let (rollout_path, _forked_session_id) =
@@ -449,18 +442,15 @@ impl Codex {
                         .map_err(|e| ExecutorError::FollowUpNotSupported(e.to_string()))?;
                 let overrides = conversation_params;
                 let response = client
-                    .resume_conversation(rollout_path.clone(), overrides)
+                    .thread_resume(rollout_path.clone(), session_id, overrides)
                     .await?;
                 tracing::debug!(
                     "resuming session using rollout file {}",
                     rollout_path.display()
                 );
-                let conversation_id = response.conversation_id;
-                client.register_session(&conversation_id).await?;
-                client.add_conversation_listener(conversation_id).await?;
-                client
-                    .send_user_message(conversation_id, combined_prompt)
-                    .await?;
+                let thread_id = response.thread.id;
+                client.register_session(thread_id.clone()).await?;
+                client.turn_start(thread_id, combined_prompt).await?;
             }
         }
         Ok(())

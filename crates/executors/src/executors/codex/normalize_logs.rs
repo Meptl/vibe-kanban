@@ -6,6 +6,7 @@ use std::{
 
 use codex_app_server_protocol::{
     JSONRPCNotification, JSONRPCResponse, NewConversationResponse, ServerNotification,
+    ThreadResumeResponse, ThreadStartResponse,
 };
 use codex_mcp_types::ContentBlock;
 use codex_protocol::{
@@ -402,18 +403,46 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
             }
 
             if let Ok(server_notification) = serde_json::from_str::<ServerNotification>(&line) {
-                if let ServerNotification::SessionConfigured(session_configured) =
-                    server_notification
-                {
-                    msg_store.push_session_id(session_configured.session_id.to_string());
-                    handle_model_params(
-                        Some(session_configured.model),
-                        session_configured.reasoning_effort,
-                        &msg_store,
-                        &entry_index,
-                        &mut state.model_params,
-                    );
-                };
+                match server_notification {
+                    ServerNotification::SessionConfigured(session_configured) => {
+                        msg_store.push_session_id(session_configured.session_id.to_string());
+                        handle_model_params(
+                            Some(session_configured.model),
+                            session_configured.reasoning_effort,
+                            &msg_store,
+                            &entry_index,
+                            &mut state.model_params,
+                        );
+                    }
+                    ServerNotification::ThreadStarted(notification) => {
+                        msg_store.push_session_id(notification.thread.id);
+                    }
+                    ServerNotification::AgentMessageDelta(notification) => {
+                        state.thinking = None;
+                        let (entry, index, is_new) =
+                            state.assistant_message_append(notification.delta);
+                        upsert_normalized_entry(&msg_store, index, entry, is_new);
+                    }
+                    ServerNotification::ReasoningTextDelta(notification) => {
+                        state.assistant = None;
+                        let (entry, index, is_new) = state.thinking_append(notification.delta);
+                        upsert_normalized_entry(&msg_store, index, entry, is_new);
+                    }
+                    ServerNotification::ReasoningSummaryTextDelta(notification) => {
+                        state.assistant = None;
+                        let (entry, index, is_new) = state.thinking_append(notification.delta);
+                        upsert_normalized_entry(&msg_store, index, entry, is_new);
+                    }
+                    ServerNotification::ReasoningSummaryPartAdded(..) => {
+                        state.assistant = None;
+                        state.thinking = None;
+                    }
+                    ServerNotification::TurnCompleted(..) => {
+                        state.assistant = None;
+                        state.thinking = None;
+                    }
+                    _ => {}
+                }
                 continue;
             } else if let Some(session_id) = line
                 .strip_prefix(r#"{"method":"sessionConfigured","params":{"sessionId":""#)
@@ -1042,6 +1071,30 @@ fn handle_jsonrpc_response(
     entry_index: &EntryIndexProvider,
     model_params: &mut ModelParamsState,
 ) {
+    if let Ok(response) = serde_json::from_value::<ThreadStartResponse>(response.result.clone()) {
+        msg_store.push_session_id(response.thread.id);
+        handle_model_params(
+            Some(response.model),
+            response.reasoning_effort,
+            msg_store,
+            entry_index,
+            model_params,
+        );
+        return;
+    }
+
+    if let Ok(response) = serde_json::from_value::<ThreadResumeResponse>(response.result.clone()) {
+        msg_store.push_session_id(response.thread.id);
+        handle_model_params(
+            Some(response.model),
+            response.reasoning_effort,
+            msg_store,
+            entry_index,
+            model_params,
+        );
+        return;
+    }
+
     let Ok(response) = serde_json::from_value::<NewConversationResponse>(response.result.clone())
     else {
         return;
