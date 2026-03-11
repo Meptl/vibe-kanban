@@ -11,6 +11,7 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from '@/i18n';
 import { Projects } from '@/pages/Projects';
 import { ProjectTasks } from '@/pages/ProjectTasks';
+import { ProjectRepositoryNotDetected } from '@/pages/ProjectRepositoryNotDetected';
 import { NormalLayout } from '@/components/layout/NormalLayout';
 
 import {
@@ -99,6 +100,10 @@ function AppContent() {
                   <Route
                     path="/projects/:projectId/tasks"
                     element={<ProjectTasks />}
+                  />
+                  <Route
+                    path="/projects/:projectId/repository-not-detected"
+                    element={<ProjectRepositoryNotDetected />}
                   />
                   <Route path="/settings/*" element={<SettingsLayout />}>
                     <Route index element={<Navigate to="general" replace />} />

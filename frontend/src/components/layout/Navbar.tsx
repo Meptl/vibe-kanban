@@ -112,7 +112,7 @@ export function Navbar() {
           </div>
 
           <div className="flex flex-1 items-center justify-end gap-1">
-            {projectId ? (
+            {isProjectTaskRoute && projectId ? (
               <>
                 <div className="flex items-center gap-1">
                   <OpenInIdeButton

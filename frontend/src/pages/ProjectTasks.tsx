@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { attemptsApi, projectsApi, tasksApi } from '@/lib/api';
-import type { GitBranch } from 'shared/types';
+import { attemptsApi, tasksApi } from '@/lib/api';
 import { openTaskForm } from '@/lib/openTaskForm';
 import { FeatureShowcaseDialog } from '@/components/dialogs/global/FeatureShowcaseDialog';
 import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
@@ -25,10 +24,12 @@ import { useUserSystem } from '@/components/ConfigProvider';
 
 import { useSearch } from '@/contexts/SearchContext';
 import { useProject } from '@/contexts/ProjectContext';
+import { useProjectBranches } from '@/hooks/useProjectBranches';
 import { useTaskAttempts } from '@/hooks/useTaskAttempts';
 import { useTaskAttempt } from '@/hooks/useTaskAttempt';
 import { useBranchStatus, useAttemptExecution } from '@/hooks';
 import { paths } from '@/lib/paths';
+import { isUnderlyingRepoNotDetectedError } from '@/lib/repositoryErrors';
 import { ExecutionProcessesProvider } from '@/contexts/ExecutionProcessesContext';
 import { ClickedElementsProvider } from '@/contexts/ClickedElementsProvider';
 import { ReviewProvider } from '@/contexts/ReviewProvider';
@@ -398,15 +399,8 @@ export function ProjectTasks() {
   const doneCleanupDays = Math.max(0, config?.done_task_cleanup_days ?? 0);
 
   const { data: branchStatus } = useBranchStatus(attempt?.id);
-  const [branches, setBranches] = useState<GitBranch[]>([]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    projectsApi
-      .getBranches(projectId)
-      .then(setBranches)
-      .catch(() => setBranches([]));
-  }, [projectId]);
+  const { data: branches = [], error: projectBranchesError } =
+    useProjectBranches(projectId);
 
   const rawMode = searchParams.get('view') as LayoutMode;
   const mode: LayoutMode =
@@ -982,6 +976,15 @@ export function ProjectTasks() {
   );
 
   const isInitialTasksLoad = isLoading && tasks.length === 0;
+  const isUnderlyingRepoMissing = isUnderlyingRepoNotDetectedError(
+    projectBranchesError
+  );
+
+  if (isUnderlyingRepoMissing && projectId) {
+    return (
+      <Navigate to={paths.projectRepositoryNotDetected(projectId)} replace />
+    );
+  }
 
   if (projectError) {
     return (
