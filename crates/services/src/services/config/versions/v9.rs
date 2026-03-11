@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Error;
 use executors::{executors::BaseCodingAgent, profile::ExecutorProfileId};
 use serde::{Deserialize, Serialize};
@@ -74,6 +76,8 @@ pub struct Config {
     pub showcases: ShowcaseState,
     #[serde(default = "default_done_task_cleanup_days")]
     pub done_task_cleanup_days: u32,
+    #[serde(default)]
+    pub automatic_done_task_cleanup_days_by_project: HashMap<String, u32>,
     #[serde(default = "default_task_title_prompt")]
     pub task_title_prompt: Option<String>,
     #[serde(default = "default_task_description_prompt")]
@@ -102,6 +106,7 @@ impl Config {
             git_branch_prefix: old_config.git_branch_prefix,
             showcases: old_config.showcases,
             done_task_cleanup_days: default_done_task_cleanup_days(),
+            automatic_done_task_cleanup_days_by_project: HashMap::new(),
             task_title_prompt: default_task_title_prompt(),
             task_description_prompt: default_task_description_prompt(),
         }
@@ -150,6 +155,7 @@ impl Default for Config {
             git_branch_prefix: super::default_git_branch_prefix(),
             showcases: ShowcaseState::default(),
             done_task_cleanup_days: default_done_task_cleanup_days(),
+            automatic_done_task_cleanup_days_by_project: HashMap::new(),
             task_title_prompt: default_task_title_prompt(),
             task_description_prompt: default_task_description_prompt(),
         }

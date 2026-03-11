@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { useTranslation } from 'react-i18next';
 import { defineModal } from '@/lib/modals';
@@ -12,6 +12,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -23,6 +24,12 @@ export interface DoneTaskCandidate {
 export interface DoneCleanupDialogProps {
   defaultDays: number;
   doneTasks: DoneTaskCandidate[];
+  automaticCleanupEnabled: boolean;
+  automaticCleanupDays: number;
+  onSaveAutomaticCleanup?: (params: {
+    enabled: boolean;
+    olderThanDays: number;
+  }) => Promise<void> | void;
 }
 
 export type DoneCleanupDialogResult =
@@ -35,11 +42,40 @@ const normalizeDays = (value: number): number => {
 };
 
 const DoneCleanupDialogImpl = NiceModal.create<DoneCleanupDialogProps>(
-  ({ defaultDays, doneTasks }) => {
+  ({
+    defaultDays,
+    doneTasks,
+    automaticCleanupEnabled,
+    automaticCleanupDays,
+    onSaveAutomaticCleanup,
+  }) => {
     const modal = useModal();
     const { t } = useTranslation('tasks');
     const [daysInput, setDaysInput] = useState(String(normalizeDays(defaultDays)));
+    const [autoEnabled, setAutoEnabled] = useState(automaticCleanupEnabled);
+    const [autoDaysInput, setAutoDaysInput] = useState(
+      String(normalizeDays(automaticCleanupDays))
+    );
+    const [initialAutoEnabled, setInitialAutoEnabled] = useState(
+      automaticCleanupEnabled
+    );
+    const [initialAutoDays, setInitialAutoDays] = useState(
+      normalizeDays(automaticCleanupDays)
+    );
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [autoSaved, setAutoSaved] = useState(false);
+
+    useEffect(() => {
+      if (!modal.visible) {
+        return;
+      }
+      const normalizedAutomaticDays = normalizeDays(automaticCleanupDays);
+      setAutoEnabled(automaticCleanupEnabled);
+      setAutoDaysInput(String(normalizedAutomaticDays));
+      setInitialAutoEnabled(automaticCleanupEnabled);
+      setInitialAutoDays(normalizedAutomaticDays);
+      setAutoSaved(false);
+    }, [automaticCleanupDays, automaticCleanupEnabled, modal.visible]);
 
     const daysValue = useMemo(() => {
       const parsed = Number(daysInput);
@@ -51,6 +87,27 @@ const DoneCleanupDialogImpl = NiceModal.create<DoneCleanupDialogProps>(
       if (daysValue === null) return null;
       return new Date(Date.now() - daysValue * DAY_IN_MS);
     }, [daysValue]);
+    const autoDaysValue = useMemo(() => {
+      const parsed = Number(autoDaysInput);
+      if (!Number.isFinite(parsed)) return null;
+      return normalizeDays(parsed);
+    }, [autoDaysInput]);
+    const hasAutomaticChanges = useMemo(() => {
+      if (autoEnabled !== initialAutoEnabled) {
+        return true;
+      }
+      if (autoDaysValue === null) {
+        return false;
+      }
+      return autoDaysValue !== initialAutoDays;
+    }, [autoDaysValue, autoEnabled, initialAutoDays, initialAutoEnabled]);
+    const canSaveAutomatic = useMemo(
+      () =>
+        !isSubmitting &&
+        hasAutomaticChanges &&
+        (!autoEnabled || autoDaysValue !== null),
+      [hasAutomaticChanges, isSubmitting, autoDaysValue, autoEnabled]
+    );
 
     const eligibleCount = useMemo(() => {
       if (!cutoffDate) return 0;
@@ -74,6 +131,44 @@ const DoneCleanupDialogImpl = NiceModal.create<DoneCleanupDialogProps>(
       } as DoneCleanupDialogResult);
       modal.hide();
       setIsSubmitting(false);
+    };
+
+    const handleSaveAutomatic = async () => {
+      if (autoEnabled && autoDaysValue === null) return;
+      try {
+        setIsSubmitting(true);
+        const nextOlderThanDays =
+          autoDaysValue === null
+            ? initialAutoDays
+            : autoDaysValue;
+        await onSaveAutomaticCleanup?.({
+          enabled: autoEnabled,
+          olderThanDays: nextOlderThanDays,
+        });
+        setInitialAutoEnabled(autoEnabled);
+        setInitialAutoDays(nextOlderThanDays);
+        setAutoSaved(true);
+      } catch (error) {
+        console.error('Failed to save automatic cleanup:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    useEffect(() => {
+      if (!autoSaved) return;
+      const timerId = window.setTimeout(() => {
+        setAutoSaved(false);
+      }, 3000);
+      return () => {
+        window.clearTimeout(timerId);
+      };
+    }, [autoSaved]);
+
+    const handleAutomaticCheckboxChange = (checked: boolean) => {
+      const nextChecked = checked === true;
+      setAutoSaved(false);
+      setAutoEnabled(nextChecked);
     };
 
     return (
@@ -102,9 +197,66 @@ const DoneCleanupDialogImpl = NiceModal.create<DoneCleanupDialogProps>(
                 total: doneTasks.length,
               })}
             </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="automatic-done-cleanup"
+                  checked={autoEnabled}
+                  onCheckedChange={handleAutomaticCheckboxChange}
+                  disabled={isSubmitting}
+                />
+                <Label
+                  htmlFor="automatic-done-cleanup"
+                  className="cursor-pointer font-medium"
+                >
+                  {autoEnabled
+                    ? t('doneCleanup.autoLabelEnabled', {
+                        defaultValue: 'Automatic cleanup older than (days)',
+                      })
+                    : t('doneCleanup.autoLabel', {
+                        defaultValue: 'Automatic cleanup',
+                      })}
+                </Label>
+                {autoEnabled ? (
+                  <Input
+                    id="automatic-done-cleanup-days"
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={autoDaysInput}
+                    onChange={(event) => {
+                      setAutoDaysInput(event.target.value);
+                      setAutoSaved(false);
+                    }}
+                    disabled={isSubmitting}
+                    className="w-24"
+                  />
+                ) : null}
+                <Button
+                  variant="outline"
+                  onClick={handleSaveAutomatic}
+                  disabled={!canSaveAutomatic}
+                  className={
+                    canSaveAutomatic
+                      ? 'ml-auto bg-emerald-200 border-emerald-300 text-emerald-900 hover:bg-emerald-300 font-semibold'
+                      : 'ml-auto bg-transparent text-muted-foreground'
+                  }
+                >
+                  {t('doneCleanup.saveAutomatic', {
+                    defaultValue: 'Save',
+                  })}
+                </Button>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
+            {autoSaved ? (
+              <span className="mr-auto self-center text-sm text-muted-foreground">
+                {t('doneCleanup.saved', { defaultValue: 'Saved.' })}
+              </span>
+            ) : null}
             <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>
               {t('doneCleanup.cancel')}
             </Button>

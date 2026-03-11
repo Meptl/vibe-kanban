@@ -88,6 +88,7 @@ const TASK_STATUSES = [
   'done',
   'cancelled',
 ] as const;
+const AUTO_DONE_CLEANUP_INTERVAL_MS = 30 * 60 * 1000;
 
 const normalizeStatus = (status: string): TaskStatus =>
   status.toLowerCase() as TaskStatus;
@@ -396,7 +397,13 @@ export function ProjectTasks() {
   const { data: attempt, isLoading: isAttemptLoading } =
     useTaskAttempt(effectiveAttemptId);
   const taskRouteResolutionRef = useRef<string | null>(null);
+  const skipNextAutomaticDoneCleanupRef = useRef<Record<string, true>>({});
   const doneCleanupDays = Math.max(0, config?.done_task_cleanup_days ?? 0);
+  const automaticDoneCleanupByProject =
+    config?.automatic_done_task_cleanup_days_by_project ?? {};
+  const automaticDoneCleanupDaysForProject = projectId
+    ? automaticDoneCleanupByProject[projectId]
+    : undefined;
 
   const { data: branchStatus } = useBranchStatus(attempt?.id);
   const { data: branches = [], error: projectBranchesError } =
@@ -564,6 +571,11 @@ export function ProjectTasks() {
       ),
     [visibleTasksByStatus]
   );
+  const doneTasksRef = useRef(doneTasks);
+
+  useEffect(() => {
+    doneTasksRef.current = doneTasks;
+  }, [doneTasks]);
 
   const handleClosePanel = useCallback(() => {
     if (projectId) {
@@ -629,12 +641,64 @@ export function ProjectTasks() {
   }, [isTaskView, navigate, navigateToAttemptDiffs, projectId, selectedTask]);
 
   const handleDoneCleanup = useCallback(async () => {
+    const deleteDoneTasksOlderThanDays = async (cleanupDays: number) => {
+      const cutoffTime = Date.now() - cleanupDays * 24 * 60 * 60 * 1000;
+      const tasksToDelete = doneTasks.filter(
+        (task) => new Date(task.updated_at).getTime() <= cutoffTime
+      );
+
+      if (tasksToDelete.length === 0) {
+        return { attempted: 0, failed: 0 };
+      }
+
+      const results = await Promise.allSettled(
+        tasksToDelete.map((task) => tasksApi.delete(task.id))
+      );
+
+      const failedCount = results.filter(
+        (resultItem) => resultItem.status === 'rejected'
+      ).length;
+      return { attempted: tasksToDelete.length, failed: failedCount };
+    };
+
+    const saveAutomaticCleanup = async ({
+      enabled,
+      olderThanDays,
+    }: {
+      enabled: boolean;
+      olderThanDays: number;
+    }) => {
+      if (!projectId) {
+        return;
+      }
+      const automaticCleanupDays = Math.max(0, Math.floor(olderThanDays));
+      const nextByProject = { ...automaticDoneCleanupByProject };
+
+      if (!enabled) {
+        delete nextByProject[projectId];
+      } else {
+        skipNextAutomaticDoneCleanupRef.current[projectId] = true;
+        nextByProject[projectId] = automaticCleanupDays;
+      }
+
+      await updateAndSaveConfig({
+        automatic_done_task_cleanup_days_by_project: nextByProject,
+      });
+    };
+
     const result = await DoneCleanupDialog.show({
       defaultDays: doneCleanupDays,
       doneTasks: doneTasks.map((task) => ({
         id: task.id,
         updated_at: task.updated_at,
       })),
+      automaticCleanupEnabled:
+        typeof automaticDoneCleanupDaysForProject === 'number',
+      automaticCleanupDays:
+        typeof automaticDoneCleanupDaysForProject === 'number'
+          ? automaticDoneCleanupDaysForProject
+          : doneCleanupDays,
+      onSaveAutomaticCleanup: saveAutomaticCleanup,
     }).finally(() => {
       DoneCleanupDialog.hide();
     });
@@ -651,28 +715,71 @@ export function ProjectTasks() {
       });
     }
 
-    const cutoffTime = Date.now() - cleanupDays * 24 * 60 * 60 * 1000;
-    const tasksToDelete = doneTasks.filter(
-      (task) => new Date(task.updated_at).getTime() <= cutoffTime
-    );
+    const { attempted, failed } = await deleteDoneTasksOlderThanDays(cleanupDays);
+    if (attempted === 0) {
+      return;
+    }
+    if (failed > 0) {
+      console.error(
+        `Done cleanup deleted ${attempted - failed}/${attempted} tasks`
+      );
+    }
+  }, [
+    automaticDoneCleanupByProject,
+    automaticDoneCleanupDaysForProject,
+    config,
+    doneCleanupDays,
+    doneTasks,
+    projectId,
+    updateAndSaveConfig,
+  ]);
 
-    if (tasksToDelete.length === 0) {
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+    if (typeof automaticDoneCleanupDaysForProject !== 'number') {
       return;
     }
 
-    const results = await Promise.allSettled(
-      tasksToDelete.map((task) => tasksApi.delete(task.id))
-    );
+    const runAutomaticDoneCleanup = async () => {
+      if (skipNextAutomaticDoneCleanupRef.current[projectId]) {
+        delete skipNextAutomaticDoneCleanupRef.current[projectId];
+        return;
+      }
 
-    const failedCount = results.filter(
-      (resultItem) => resultItem.status === 'rejected'
-    ).length;
-    if (failedCount > 0) {
-      console.error(
-        `Done cleanup deleted ${tasksToDelete.length - failedCount}/${tasksToDelete.length} tasks`
+      const cleanupDays = Math.max(0, Math.floor(automaticDoneCleanupDaysForProject));
+      const cutoffTime = Date.now() - cleanupDays * 24 * 60 * 60 * 1000;
+      const tasksToDelete = doneTasksRef.current.filter(
+        (task) => new Date(task.updated_at).getTime() <= cutoffTime
       );
-    }
-  }, [config, doneCleanupDays, doneTasks, updateAndSaveConfig]);
+
+      if (tasksToDelete.length === 0) {
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        tasksToDelete.map((task) => tasksApi.delete(task.id))
+      );
+      const failedCount = results.filter(
+        (resultItem) => resultItem.status === 'rejected'
+      ).length;
+      if (failedCount > 0) {
+        console.error(
+          `Automatic done cleanup deleted ${tasksToDelete.length - failedCount}/${tasksToDelete.length} tasks for project ${projectId}`
+        );
+      }
+    };
+
+    void runAutomaticDoneCleanup();
+    const intervalId = window.setInterval(() => {
+      void runAutomaticDoneCleanup();
+    }, AUTO_DONE_CLEANUP_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [automaticDoneCleanupDaysForProject, projectId]);
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
