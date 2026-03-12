@@ -278,6 +278,10 @@ impl LogState {
         self.streaming_text_append(content, StreamingTextKind::Thinking)
     }
 
+    fn close_streaming_text(&mut self) {
+        self.assistant = None;
+        self.thinking = None;
+    }
 }
 
 fn normalize_file_changes(
@@ -422,6 +426,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         aggregated_output,
                         ..
                     } => {
+                        state.close_streaming_text();
                         let mut command_state = CommandState {
                             index: None,
                             command,
@@ -445,6 +450,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         changes,
                         status,
                     } => {
+                        state.close_streaming_text();
                         let normalized = normalize_file_changes(&worktree_path_str, &changes);
                         let mut patch_state = PatchState::default();
                         for (path, file_changes) in normalized {
@@ -475,6 +481,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         error,
                         ..
                     } => {
+                        state.close_streaming_text();
                         let mut mcp_tool_state = McpToolState {
                             index: None,
                             invocation: McpInvocation {
@@ -532,6 +539,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         state.mcp_tools.insert(id, mcp_tool_state);
                     }
                     ThreadItem::WebSearch { id, query } => {
+                        state.close_streaming_text();
                         let mut web_search_state = WebSearchState::new();
                         web_search_state.query = Some(query);
                         let index = add_normalized_entry(
@@ -543,6 +551,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         state.web_searches.insert(id, web_search_state);
                     }
                     ThreadItem::ImageView { path, .. } => {
+                        state.close_streaming_text();
                         let relative_path = make_path_relative(&path, &worktree_path_str);
                         add_normalized_entry(
                             &msg_store,
@@ -585,6 +594,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         aggregated_output,
                         ..
                     } => {
+                        state.close_streaming_text();
                         if let Some(mut command_state) = state.commands.remove(&id) {
                             command_state.formatted_output = aggregated_output;
                             command_state.exit_code = exit_code;
@@ -603,6 +613,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         changes,
                         status,
                     } => {
+                        state.close_streaming_text();
                         if let Some(mut patch_state) = state.patches.remove(&id) {
                             let normalized = normalize_file_changes(&worktree_path_str, &changes);
                             let mut iter = normalized.into_iter();
@@ -629,6 +640,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         error,
                         ..
                     } => {
+                        state.close_streaming_text();
                         if let Some(mut mcp_tool_state) = state.mcp_tools.remove(&id) {
                             mcp_tool_state.status = mcp_status(&status);
                             if let Some(err) = error {
@@ -680,6 +692,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         }
                     }
                     ThreadItem::WebSearch { id, query } => {
+                        state.close_streaming_text();
                         if let Some(mut entry) = state.web_searches.remove(&id) {
                             entry.status = ToolStatus::Success;
                             entry.query = Some(query);
@@ -695,6 +708,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     _ => {}
                 },
                 ServerNotification::TurnPlanUpdated(notification) => {
+                    state.close_streaming_text();
                     let todos: Vec<TodoItem> = notification
                         .plan
                         .iter()
@@ -736,6 +750,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     );
                 }
                 ServerNotification::ContextCompacted(..) => {
+                    state.close_streaming_text();
                     add_normalized_entry(
                         &msg_store,
                         &entry_index,
@@ -749,6 +764,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                 }
                 ServerNotification::ThreadTokenUsageUpdated(..) => {}
                 ServerNotification::Error(notification) => {
+                    state.close_streaming_text();
                     add_normalized_entry(
                         &msg_store,
                         &entry_index,
@@ -766,8 +782,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     );
                 }
                 ServerNotification::TurnCompleted(..) => {
-                    state.assistant = None;
-                    state.thinking = None;
+                    state.close_streaming_text();
                 }
                 _ => {}
             }
