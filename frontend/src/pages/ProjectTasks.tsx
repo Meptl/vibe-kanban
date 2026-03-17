@@ -399,8 +399,10 @@ export function ProjectTasks() {
   const taskRouteResolutionRef = useRef<string | null>(null);
   const skipNextAutomaticDoneCleanupRef = useRef<Record<string, true>>({});
   const doneCleanupDays = Math.max(0, config?.done_task_cleanup_days ?? 0);
-  const automaticDoneCleanupByProject =
-    config?.automatic_done_task_cleanup_days_by_project ?? {};
+  const automaticDoneCleanupByProject = useMemo(
+    () => config?.automatic_done_task_cleanup_days_by_project ?? {},
+    [config?.automatic_done_task_cleanup_days_by_project]
+  );
   const automaticDoneCleanupDaysForProject = projectId
     ? automaticDoneCleanupByProject[projectId]
     : undefined;
