@@ -425,12 +425,10 @@ impl LocalContainerService {
                 }
 
                 if container.should_finalize(&ctx) {
-                    // Only execute queued messages if the execution succeeded
-                    // If it failed or was killed, just clear the queue and finalize
-                    let should_execute_queued = !matches!(
-                        ctx.execution_process.status,
-                        ExecutionProcessStatus::Failed | ExecutionProcessStatus::Killed
-                    );
+                    // Execute queued messages for successful and user-stopped runs.
+                    // Only discard queued messages when execution genuinely failed.
+                    let should_execute_queued =
+                        !matches!(ctx.execution_process.status, ExecutionProcessStatus::Failed);
 
                     if let Some(queued_msg) = container
                         .queued_message_service
@@ -464,7 +462,7 @@ impl LocalContainerService {
                                 }
                             }
                         } else {
-                            // Execution failed or was killed - discard the queued message and finalize
+                            // Execution failed - discard the queued message and finalize
                             tracing::info!(
                                 "Discarding queued message for attempt {} due to execution status {:?}",
                                 ctx.task_attempt.id,
