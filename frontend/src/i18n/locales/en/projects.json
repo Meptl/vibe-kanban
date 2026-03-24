@@ -4,7 +4,8 @@
   "createProject": "Create Project",
   "loading": "Loading projects...",
   "errors": {
-    "fetchFailed": "Failed to fetch projects"
+    "fetchFailed": "Failed to fetch projects",
+    "notGitRepository": "Selected folder is not a Git repository. Choose a folder with an existing .git repository."
   },
   "empty": {
     "title": "No projects yet",

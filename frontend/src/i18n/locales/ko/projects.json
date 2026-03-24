@@ -4,7 +4,8 @@
   "createProject": "프로젝트 생성",
   "loading": "프로젝트 로딩 중...",
   "errors": {
-    "fetchFailed": "프로젝트를 불러오지 못했습니다"
+    "fetchFailed": "프로젝트를 불러오지 못했습니다",
+    "notGitRepository": "선택한 폴더는 Git 저장소가 아닙니다. 기존 .git 저장소가 있는 폴더를 선택하세요."
   },
   "empty": {
     "title": "아직 프로젝트가 없습니다",

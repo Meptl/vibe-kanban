@@ -4,7 +4,8 @@
   "createProject": "プロジェクトを作成",
   "loading": "プロジェクトを読み込み中...",
   "errors": {
-    "fetchFailed": "プロジェクトの取得に失敗しました"
+    "fetchFailed": "プロジェクトの取得に失敗しました",
+    "notGitRepository": "選択したフォルダーは Git リポジトリではありません。既存の .git リポジトリがあるフォルダーを選択してください。"
   },
   "empty": {
     "title": "プロジェクトがありません",

@@ -72,7 +72,11 @@ export function ProjectList() {
       await refetch();
     } catch (error) {
       console.error('Failed to create project:', error);
-      setMutationError(t('errors.fetchFailed'));
+      setMutationError(
+        isUnderlyingRepoNotDetectedError(error)
+          ? t('errors.notGitRepository')
+          : t('errors.fetchFailed')
+      );
     }
   }, [refetch, t]);
 
