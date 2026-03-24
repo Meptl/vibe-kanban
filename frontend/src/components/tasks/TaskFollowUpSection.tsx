@@ -719,14 +719,16 @@ export function TaskFollowUpSection({
                 onClick={stopExecution}
                 disabled={isStopping}
                 size="sm"
-                variant="destructive"
+                variant={isQueued ? 'default' : 'destructive'}
               >
                 {isStopping ? (
                   <Loader2 className="animate-spin h-4 w-4 mr-2" />
                 ) : (
                   <>
                     <StopCircle className="h-4 w-4 mr-2" />
-                    {t('followUp.stop')}
+                    {isQueued
+                      ? t('followUp.steer', 'Steer')
+                      : t('followUp.stop')}
                   </>
                 )}
               </Button>
