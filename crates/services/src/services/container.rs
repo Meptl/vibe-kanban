@@ -581,7 +581,8 @@ pub trait ContainerService {
         let cleanup_action = self.cleanup_action(project.cleanup_script.clone());
 
         // Choose whether to execute the setup_script or coding agent first
-        let execution_process = if let Some(setup_script) = project.setup_script {
+        let setup_script = project.setup_script.filter(|script| !script.trim().is_empty());
+        let execution_process = if let Some(setup_script) = setup_script {
             if project.parallel_setup_script {
                 // PARALLEL EXECUTION: Start setup script and coding agent independently
                 // Setup script runs without next_action (it completes on its own)

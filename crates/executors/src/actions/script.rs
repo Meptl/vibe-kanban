@@ -5,7 +5,7 @@ use command_group::AsyncCommandGroup;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use ts_rs::TS;
-use workspace_utils::shell::get_shell_command;
+use workspace_utils::{path::get_vibe_kanban_temp_dir, shell::get_shell_command};
 
 use crate::{
     actions::Executable,
@@ -42,6 +42,26 @@ impl Executable for ScriptRequest {
         _approvals: Arc<dyn ExecutorApprovalService>,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
+        let script_to_run = if matches!(self.context, ScriptContext::SetupScript) {
+            if let Some(attempt_id) = env.get("VK_ATTEMPT_ID") {
+                let setup_env_dir = get_vibe_kanban_temp_dir().join("setup-env");
+                let setup_env_before = setup_env_dir.join(format!("{attempt_id}.before"));
+                let setup_env_after = setup_env_dir.join(format!("{attempt_id}.after"));
+
+                format!(
+                    "mkdir -p \"{setup_env_dir}\"\n{script}\n__vk_setup_status=$?\nenv > \"{setup_env_before}\"\nmv \"{setup_env_before}\" \"{setup_env_after}\"\nexit $__vk_setup_status",
+                    setup_env_dir = setup_env_dir.to_string_lossy(),
+                    setup_env_before = setup_env_before.to_string_lossy(),
+                    setup_env_after = setup_env_after.to_string_lossy(),
+                    script = self.script
+                )
+            } else {
+                self.script.clone()
+            }
+        } else {
+            self.script.clone()
+        };
+
         let (shell_cmd, shell_arg) = get_shell_command();
         let mut command = Command::new(shell_cmd);
         command
@@ -50,7 +70,7 @@ impl Executable for ScriptRequest {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .arg(shell_arg)
-            .arg(&self.script)
+            .arg(script_to_run)
             .current_dir(current_dir);
 
         // Apply environment variables

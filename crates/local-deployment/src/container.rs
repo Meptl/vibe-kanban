@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::{Arc, atomic::AtomicUsize},
     time::Duration,
@@ -27,7 +27,7 @@ use executors::{
     actions::{
         Executable, ExecutorAction, ExecutorActionType,
         coding_agent_follow_up::CodingAgentFollowUpRequest,
-        coding_agent_initial::CodingAgentInitialRequest,
+        coding_agent_initial::CodingAgentInitialRequest, script::ScriptContext,
     },
     approvals::{ExecutorApprovalService, NoopExecutorApprovalService},
     env::ExecutionEnv,
@@ -58,6 +58,7 @@ use tokio_util::io::ReaderStream;
 use utils::{
     log_msg::LogMsg,
     msg_store::MsgStore,
+    path::get_vibe_kanban_temp_dir,
     text::{git_branch_id, short_uuid, truncate_to_char_boundary},
 };
 use uuid::Uuid;
@@ -554,6 +555,49 @@ impl LocalContainerService {
         format!("{}-{}", short_uuid(attempt_id), task_title_id)
     }
 
+    fn setup_env_snapshot_paths(task_attempt_id: &Uuid) -> (PathBuf, PathBuf) {
+        let base = get_vibe_kanban_temp_dir().join("setup-env");
+        (
+            base.join(format!("{task_attempt_id}.before")),
+            base.join(format!("{task_attempt_id}.after")),
+        )
+    }
+
+    fn load_env_file(path: &Path) -> Result<HashMap<String, String>, ContainerError> {
+        let content = fs::read_to_string(path).map_err(|e| {
+            ContainerError::Other(anyhow!("Failed to read env file '{}': {e}", path.display()))
+        })?;
+
+        let mut vars = HashMap::new();
+        for line in content.lines() {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = line.split_once('=')
+                && !key.is_empty()
+            {
+                vars.insert(key.to_string(), value.to_string());
+            }
+        }
+
+        Ok(vars)
+    }
+
+    fn load_setup_env_diff(env_path: &Path) -> Result<HashMap<String, String>, ContainerError> {
+        let after = Self::load_env_file(env_path)?;
+        let existing_keys: std::collections::HashSet<String> =
+            std::env::vars().map(|(k, _)| k).collect();
+
+        let mut diff = HashMap::new();
+        for (key, value) in after {
+            if !existing_keys.contains(&key) && !key.starts_with("VK_") {
+                diff.insert(key, value);
+            }
+        }
+
+        Ok(diff)
+    }
+
     async fn track_child_msgs_in_store(&self, id: Uuid, child: &mut AsyncGroupChild) {
         let store = Arc::new(MsgStore::new());
 
@@ -881,6 +925,20 @@ impl ContainerService for LocalContainerService {
                 e
             );
         });
+
+        let (setup_env_before, setup_env_after) = Self::setup_env_snapshot_paths(&task_attempt.id);
+        for path in [&setup_env_before, &setup_env_after] {
+            if let Err(e) = fs::remove_file(path)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(
+                    "Failed to clean up setup env snapshot '{}': {}",
+                    path.display(),
+                    e
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -985,6 +1043,54 @@ impl ContainerService for LocalContainerService {
         env.insert("VK_TASK_ID", task.id.to_string());
         env.insert("VK_ATTEMPT_ID", task_attempt.id.to_string());
         env.insert("VK_ATTEMPT_BRANCH", &task_attempt.branch);
+
+        let (setup_env_before, setup_env_after) =
+            Self::setup_env_snapshot_paths(&task_attempt.id);
+        let is_setup_script = matches!(
+            executor_action.typ(),
+            ExecutorActionType::ScriptRequest(script)
+                if script.context == ScriptContext::SetupScript
+        );
+
+        if is_setup_script {
+            if let Some(parent) = setup_env_after.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                tracing::warn!(
+                    "Failed to create setup env directory '{}': {}",
+                    parent.display(),
+                    e
+                );
+            }
+
+            if let Err(e) = fs::remove_file(&setup_env_before)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(
+                    "Failed to clear previous setup env file '{}': {}",
+                    setup_env_before.display(),
+                    e
+                );
+            }
+
+            if let Err(e) = fs::remove_file(&setup_env_after)
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!(
+                    "Failed to clear previous setup env file '{}': {}",
+                    setup_env_after.display(),
+                    e
+                );
+            }
+        } else if setup_env_after.exists() {
+            match Self::load_setup_env_diff(&setup_env_after) {
+                Ok(vars) => {
+                    tracing::debug!(setup_env_diff = ?vars, "Loaded setup script env key diff");
+                    env.merge(&vars);
+                }
+                Err(e) => tracing::warn!(?e, "Failed to load setup script env var diff"),
+            }
+        }
 
         // Create the child and stream, add to execution tracker with timeout
         let mut spawned = tokio::time::timeout(
