@@ -555,9 +555,10 @@ impl LocalContainerService {
         format!("{}-{}", short_uuid(attempt_id), task_title_id)
     }
 
-    fn setup_env_snapshot_paths(task_attempt_id: &Uuid) -> (PathBuf, PathBuf) {
+    fn setup_env_diff_paths(task_attempt_id: &Uuid) -> (PathBuf, PathBuf, PathBuf) {
         let base = get_vibe_kanban_temp_dir().join("setup-env");
         (
+            base.join(format!("{task_attempt_id}.diff")),
             base.join(format!("{task_attempt_id}.before")),
             base.join(format!("{task_attempt_id}.after")),
         )
@@ -583,19 +584,8 @@ impl LocalContainerService {
         Ok(vars)
     }
 
-    fn load_setup_env_diff(env_path: &Path) -> Result<HashMap<String, String>, ContainerError> {
-        let after = Self::load_env_file(env_path)?;
-        let existing_keys: std::collections::HashSet<String> =
-            std::env::vars().map(|(k, _)| k).collect();
-
-        let mut diff = HashMap::new();
-        for (key, value) in after {
-            if !existing_keys.contains(&key) && !key.starts_with("VK_") {
-                diff.insert(key, value);
-            }
-        }
-
-        Ok(diff)
+    fn load_setup_env_diff(diff_path: &Path) -> Result<HashMap<String, String>, ContainerError> {
+        Self::load_env_file(diff_path)
     }
 
     async fn track_child_msgs_in_store(&self, id: Uuid, child: &mut AsyncGroupChild) {
@@ -926,8 +916,13 @@ impl ContainerService for LocalContainerService {
             );
         });
 
-        let (setup_env_before, setup_env_after) = Self::setup_env_snapshot_paths(&task_attempt.id);
-        for path in [&setup_env_before, &setup_env_after] {
+        let (setup_env_diff, setup_env_before, setup_env_after) =
+            Self::setup_env_diff_paths(&task_attempt.id);
+        for path in [
+            &setup_env_diff,
+            &setup_env_before,
+            &setup_env_after,
+        ] {
             if let Err(e) = fs::remove_file(path)
                 && e.kind() != std::io::ErrorKind::NotFound
             {
@@ -1044,8 +1039,8 @@ impl ContainerService for LocalContainerService {
         env.insert("VK_ATTEMPT_ID", task_attempt.id.to_string());
         env.insert("VK_ATTEMPT_BRANCH", &task_attempt.branch);
 
-        let (setup_env_before, setup_env_after) =
-            Self::setup_env_snapshot_paths(&task_attempt.id);
+        let (setup_env_diff, setup_env_before, setup_env_after) =
+            Self::setup_env_diff_paths(&task_attempt.id);
         let is_setup_script = matches!(
             executor_action.typ(),
             ExecutorActionType::ScriptRequest(script)
@@ -1053,7 +1048,7 @@ impl ContainerService for LocalContainerService {
         );
 
         if is_setup_script {
-            if let Some(parent) = setup_env_after.parent()
+            if let Some(parent) = setup_env_diff.parent()
                 && let Err(e) = fs::create_dir_all(parent)
             {
                 tracing::warn!(
@@ -1063,31 +1058,24 @@ impl ContainerService for LocalContainerService {
                 );
             }
 
-            if let Err(e) = fs::remove_file(&setup_env_before)
-                && e.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(
-                    "Failed to clear previous setup env file '{}': {}",
-                    setup_env_before.display(),
-                    e
-                );
-            }
-
-            if let Err(e) = fs::remove_file(&setup_env_after)
-                && e.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(
-                    "Failed to clear previous setup env file '{}': {}",
-                    setup_env_after.display(),
-                    e
-                );
-            }
-        } else if setup_env_after.exists() {
-            match Self::load_setup_env_diff(&setup_env_after) {
-                Ok(vars) => {
-                    tracing::debug!(setup_env_diff = ?vars, "Loaded setup script env key diff");
-                    env.merge(&vars);
+            for path in [
+                &setup_env_diff,
+                &setup_env_before,
+                &setup_env_after,
+            ] {
+                if let Err(e) = fs::remove_file(path)
+                    && e.kind() != std::io::ErrorKind::NotFound
+                {
+                    tracing::warn!(
+                        "Failed to clear previous setup env file '{}': {}",
+                        path.display(),
+                        e
+                    );
                 }
+            }
+        } else if setup_env_diff.exists() {
+            match Self::load_setup_env_diff(&setup_env_diff) {
+                Ok(vars) => env.merge(&vars),
                 Err(e) => tracing::warn!(?e, "Failed to load setup script env var diff"),
             }
         }
