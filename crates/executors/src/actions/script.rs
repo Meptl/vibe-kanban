@@ -50,7 +50,7 @@ impl Executable for ScriptRequest {
                 let setup_env_diff = setup_env_dir.join(format!("{attempt_id}.diff"));
 
                 format!(
-                    "mkdir -p \"{setup_env_dir}\"\nenv > \"{setup_env_before}\"\n{script}\n__vk_setup_status=$?\nenv > \"{setup_env_after}\"\nawk -F= 'NR==FNR {{ seen[$1]=1; next }} !($1 in seen) && $1 !~ /^VK_/ {{ print $0 }}' \"{setup_env_before}\" \"{setup_env_after}\" > \"{setup_env_diff}\"\nrm -f \"{setup_env_before}\" \"{setup_env_after}\"\nexit $__vk_setup_status",
+                    "mkdir -p \"{setup_env_dir}\"\nenv > \"{setup_env_before}\"\n{script}\n__vk_setup_status=$?\nenv > \"{setup_env_after}\"\nawk -F= 'NR==FNR {{ before[$1]=$0; next }} !($1 in before) || before[$1] != $0 {{ print $0 }}' \"{setup_env_before}\" \"{setup_env_after}\" > \"{setup_env_diff}\"\nrm -f \"{setup_env_before}\" \"{setup_env_after}\"\nexit $__vk_setup_status",
                     setup_env_dir = setup_env_dir.to_string_lossy(),
                     setup_env_before = setup_env_before.to_string_lossy(),
                     setup_env_after = setup_env_after.to_string_lossy(),
