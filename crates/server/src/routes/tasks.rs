@@ -15,7 +15,7 @@ use axum::{
 use db::models::{
     image::TaskImage,
     merge::Merge,
-    task::{CreateTask, Task, TaskWithAttemptStatus, UpdateTask},
+    task::{CreateTask, Task, TaskStatus, TaskWithAttemptStatus, UpdateTask},
     task_attempt::{CreateTaskAttempt, TaskAttempt},
 };
 use executors::profile::ExecutorProfileId;
@@ -209,7 +209,8 @@ pub async fn update_task(
         Some(s) => Some(s),                     // Non-empty string = update description
         None => existing_task.description,      // Field omitted = keep existing
     };
-    let status = payload.status.unwrap_or(existing_task.status);
+    let previous_status = existing_task.status.clone();
+    let status = payload.status.unwrap_or(previous_status.clone());
     let parent_task_attempt = payload
         .parent_task_attempt
         .or(existing_task.parent_task_attempt);
@@ -220,7 +221,7 @@ pub async fn update_task(
         existing_task.project_id,
         title,
         description,
-        status,
+        status.clone(),
         parent_task_attempt,
     )
     .await?;
@@ -228,6 +229,20 @@ pub async fn update_task(
     if let Some(image_ids) = &payload.image_ids {
         TaskImage::delete_by_task_id(&deployment.db().pool, task.id).await?;
         TaskImage::associate_many_dedup(&deployment.db().pool, task.id, image_ids).await?;
+    }
+
+    let is_drop_status = matches!(
+        status,
+        TaskStatus::Todo | TaskStatus::Cancelled | TaskStatus::Done
+    );
+    if is_drop_status && status != previous_status {
+        let attempts = TaskAttempt::fetch_all(&deployment.db().pool, Some(task.id)).await?;
+        for attempt in attempts {
+            deployment
+                .container()
+                .cleanup_setup_script_subprocesses(attempt.id)
+                .await;
+        }
     }
 
     Ok(ResponseJson(ApiResponse::success(task)))

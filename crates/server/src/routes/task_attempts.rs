@@ -271,6 +271,16 @@ pub async fn create_task_attempt(
         Task::update_parent_task_attempt(pool, task.id, Some(parent.id)).await?;
     }
 
+    // Any existing attempts for this task become stale once a new attempt is created.
+    // Ensure setup-script subprocess groups from stale attempts are terminated.
+    let existing_attempts = TaskAttempt::fetch_all(pool, Some(task.id)).await?;
+    for stale_attempt in existing_attempts {
+        deployment
+            .container()
+            .cleanup_setup_script_subprocesses(stale_attempt.id)
+            .await;
+    }
+
     let attempt_id = Uuid::new_v4();
     let git_branch_name = deployment
         .container()
@@ -618,6 +628,10 @@ pub async fn merge_task_attempt(
     )
     .await?;
     Task::update_status(pool, ctx.task.id, TaskStatus::Done).await?;
+    deployment
+        .container()
+        .cleanup_setup_script_subprocesses(task_attempt.id)
+        .await;
 
     // Stop any running dev servers for this task attempt
     let dev_servers =

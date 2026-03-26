@@ -1463,6 +1463,10 @@ impl ContainerService for LocalContainerService {
 
         Ok(())
     }
+
+    async fn cleanup_setup_script_subprocesses(&self, task_attempt_id: Uuid) {
+        self.cleanup_setup_script_process_groups(task_attempt_id).await;
+    }
 }
 fn success_exit_status() -> std::process::ExitStatus {
     #[cfg(unix)]

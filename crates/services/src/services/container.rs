@@ -84,6 +84,9 @@ pub trait ContainerService {
 
     async fn kill_all_running_processes(&self) -> Result<(), ContainerError>;
 
+    /// Kill any lingering setup-script subprocess groups tracked for this attempt.
+    async fn cleanup_setup_script_subprocesses(&self, _task_attempt_id: Uuid) {}
+
     async fn delete(&self, task_attempt: &TaskAttempt) -> Result<(), ContainerError> {
         self.try_stop(task_attempt, true).await;
         self.delete_inner(task_attempt).await
