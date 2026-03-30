@@ -265,7 +265,7 @@
     },
     "general": {
       "taskId": "任务 ID",
-      "attemptId": "尝试 ID"
+      "latestAttemptId": "最新尝试 ID"
     }
   },
   "viewRelatedTasksDialog": {

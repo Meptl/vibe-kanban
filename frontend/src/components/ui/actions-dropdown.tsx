@@ -17,6 +17,7 @@ import { CreateAttemptDialog } from '@/components/dialogs/tasks/CreateAttemptDia
 import { useProject } from '@/contexts/ProjectContext';
 import { openTaskForm } from '@/lib/openTaskForm';
 import { cn } from '@/lib/utils';
+import { attemptsApi } from '@/lib/api';
 
 interface ActionsDropdownProps {
   task?: TaskWithAttemptStatus | null;
@@ -70,10 +71,23 @@ export function ActionsDropdown({
     openInEditor();
   };
 
-  const handleViewProcesses = (e: React.MouseEvent) => {
+  const handleViewDetails = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!attempt?.id) return;
-    ViewProcessesDialog.show({ attemptId: attempt.id });
+    if (!task?.id) return;
+
+    try {
+      const taskAttempts = await attemptsApi.getAll(task.id);
+      const latestAttempt = [...taskAttempts].sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+
+      if (!latestAttempt?.id) return;
+
+      ViewProcessesDialog.show({ attemptId: latestAttempt.id });
+    } catch (error) {
+      console.error('Failed to open details from task actions:', error);
+    }
   };
 
   const handleCreateNewAttempt = (e: React.MouseEvent) => {
@@ -116,12 +130,7 @@ export function ActionsDropdown({
                 {t('actionsMenu.openInIde')}
               </DropdownMenuItem>
               <DropdownMenuItem
-                disabled={!attempt?.id}
-                onClick={handleViewProcesses}
-              >
-                {t('actionsMenu.viewProcesses')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleCreateNewAttempt}>
+                onClick={handleCreateNewAttempt}>
                 {t('actionsMenu.createNewAttempt')}
               </DropdownMenuItem>
               {hasTaskActions && (
@@ -148,6 +157,9 @@ export function ActionsDropdown({
               </DropdownMenuItem>
               <DropdownMenuItem disabled={!projectId} onClick={handleDuplicate}>
                 {t('actionsMenu.duplicate')}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!task?.id} onClick={handleViewDetails}>
+                {t('actionsMenu.viewProcesses')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!projectId}

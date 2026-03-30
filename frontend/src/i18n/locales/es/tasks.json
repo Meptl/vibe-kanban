@@ -309,7 +309,7 @@
     },
     "general": {
       "taskId": "Task ID",
-      "attemptId": "Attempt ID"
+      "latestAttemptId": "Latest Attempt ID"
     }
   },
   "viewRelatedTasksDialog": {

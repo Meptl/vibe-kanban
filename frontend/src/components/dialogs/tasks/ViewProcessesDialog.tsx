@@ -104,7 +104,7 @@ const ViewProcessesDialogImpl = NiceModal.create<ViewProcessesDialogProps>(
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t('viewProcessesDialog.general.attemptId')}
+                      {t('viewProcessesDialog.general.latestAttemptId')}
                     </p>
                     <p className="font-mono text-sm break-all">{attemptId}</p>
                   </div>
