@@ -8,7 +8,10 @@ use axum::{
     response::Json as ResponseJson,
     routing::{get, post},
 };
-use db::models::project::{CreateProject, Project, ProjectError, SearchResult, UpdateProject};
+use db::models::{
+    project::{CreateProject, Project, ProjectError, SearchResult, UpdateProject},
+    task::Task,
+};
 use ignore::WalkBuilder;
 use local_deployment::Deployment;
 use services::services::{
@@ -227,6 +230,34 @@ pub async fn delete_project(
     Extension(project): Extension<Project>,
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<()>>, StatusCode> {
+    let tasks = Task::find_by_project_id_with_attempt_status(&deployment.db().pool, project.id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch tasks for project {}: {}", project.id, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    for task_with_attempt_status in tasks {
+        if let Err(e) = crate::routes::tasks::delete_task_with_cleanup(
+            task_with_attempt_status.task,
+            deployment.clone(),
+        )
+        .await
+        {
+            tracing::error!(
+                "Failed to delete task while deleting project {}: {}",
+                project.id,
+                e
+            );
+            return Err(match e {
+                ApiError::Conflict(_) => StatusCode::CONFLICT,
+                ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+                ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            });
+        }
+    }
+
     match Project::delete(&deployment.db().pool, project.id).await {
         Ok(rows_affected) => {
             if rows_affected == 0 {
