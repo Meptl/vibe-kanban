@@ -28,7 +28,7 @@ use services::services::{
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
-use utils::response::ApiResponse;
+use utils::{execution_logs::cleanup_process_logs_task_attempt_dir, response::ApiResponse};
 use uuid::Uuid;
 
 use crate::{DeploymentImpl, error::ApiError, middleware::load_task_middleware};
@@ -304,6 +304,8 @@ pub async fn delete_task_with_cleanup(
                 })
         })
         .collect();
+    let attempt_ids_for_log_cleanup: Vec<Uuid> =
+        attempts.iter().map(|attempt| attempt.id).collect();
 
     // Use a transaction to ensure atomicity: either all operations succeed or all are rolled back
     let mut tx = deployment.db().pool.begin().await?;
@@ -352,9 +354,20 @@ pub async fn delete_task_with_cleanup(
                 task_id,
                 e
             );
-        } else {
-            tracing::info!("Background cleanup completed for task {}", task_id);
         }
+
+        for attempt_id in attempt_ids_for_log_cleanup {
+            if let Err(e) = cleanup_process_logs_task_attempt_dir(attempt_id).await {
+                tracing::warn!(
+                    "Failed to clean up execution logs for attempt {} in task {}: {}",
+                    attempt_id,
+                    task_id,
+                    e
+                );
+            }
+        }
+
+        tracing::info!("Background cleanup completed for task {}", task_id);
     });
 
     Ok(())

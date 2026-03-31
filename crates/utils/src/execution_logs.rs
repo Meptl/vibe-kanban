@@ -25,6 +25,22 @@ pub fn process_log_file_path_in_root(
         .join(format!("{}.jsonl", process_id))
 }
 
+pub async fn cleanup_process_logs_task_attempt_dir(task_attempt_id: Uuid) -> std::io::Result<()> {
+    cleanup_process_logs_task_attempt_dir_in_root(&asset_dir(), task_attempt_id).await
+}
+
+pub async fn cleanup_process_logs_task_attempt_dir_in_root(
+    root: &Path,
+    task_attempt_id: Uuid,
+) -> std::io::Result<()> {
+    let task_attempt_dir = resolve_process_logs_task_attempt_dir(root, task_attempt_id);
+    match tokio::fs::remove_dir_all(task_attempt_dir).await {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 pub struct ExecutionLogWriter {
     path: PathBuf,
     file: tokio::fs::File,
