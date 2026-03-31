@@ -170,6 +170,18 @@ export function MultiFileSearchTextarea({
     }
   };
 
+  const handleBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    // Defer closing so item click handlers can run when blur is caused by
+    // selecting a suggestion with the mouse.
+    setTimeout(() => {
+      setShowDropdown(false);
+      setSearchQuery('');
+      setSelectedIndex(-1);
+    }, 0);
+
+    onBlur?.(e);
+  };
+
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle dropdown navigation first
@@ -308,6 +320,23 @@ export function MultiFileSearchTextarea({
     }
   }, [searchResults.length, showDropdown]);
 
+  // Close suggestions when the page/container scrolls so dropdown does not
+  // float in a stale position detached from the input.
+  useEffect(() => {
+    if (!showDropdown) return;
+
+    const handleScroll = () => {
+      setShowDropdown(false);
+      setSearchQuery('');
+      setSelectedIndex(-1);
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [showDropdown]);
+
   // Scroll selected item into view when navigating with arrow keys
   useEffect(() => {
     if (selectedIndex >= 0) {
@@ -328,7 +357,7 @@ export function MultiFileSearchTextarea({
         ref={textareaRef}
         value={value}
         onChange={handleChange}
-        onBlur={onBlur}
+        onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={rows}
@@ -367,6 +396,11 @@ export function MultiFileSearchTextarea({
                         ? 'bg-blue-50 text-blue-900'
                         : 'hover:bg-muted'
                     }`}
+                    onMouseDown={(e) => {
+                      // Keep textarea focused so blur cleanup does not run
+                      // before this item click can select a file.
+                      e.preventDefault();
+                    }}
                     onClick={() => selectFile(file)}
                   >
                     <div className="font-medium truncate">{file.name}</div>
