@@ -313,7 +313,7 @@ function normalizeGlyph(glyph) {
   return { rows, width };
 }
 
-function renderBlockText(input, options = {}) {
+function buildBlockCanvas(input, options = {}) {
   const text = String(input || '');
   const gap = options.gap ?? 1;
   const fallback = normalizeGlyph(GLYPHS['?']);
@@ -330,7 +330,7 @@ function renderBlockText(input, options = {}) {
   }, 0);
 
   if (totalWidth === 0) {
-    return '';
+    return [];
   }
 
   const canvas = Array.from({ length: 5 }, () => Array(totalWidth).fill(' '));
@@ -365,16 +365,146 @@ function renderBlockText(input, options = {}) {
     }
   }
 
+  return canvas;
+}
+
+function boxCharForConnections(connections) {
+  const key = ['up', 'right', 'down', 'left']
+    .filter((dir) => connections[dir])
+    .join(',');
+
+  switch (key) {
+    case 'up,down':
+    case 'up':
+    case 'down':
+      return '║';
+    case 'right,left':
+    case 'right':
+    case 'left':
+      return '═';
+    case 'right,down':
+      return '╔';
+    case 'down,left':
+      return '╗';
+    case 'up,right':
+      return '╚';
+    case 'up,left':
+      return '╝';
+    case 'up,right,down':
+      return '╠';
+    case 'up,down,left':
+      return '╣';
+    case 'right,down,left':
+      return '╦';
+    case 'up,right,left':
+      return '╩';
+    case 'up,right,down,left':
+      return '╬';
+    default:
+      return '╬';
+  }
+}
+
+// @lat: [[ascii-block-text#Bottom Right Shadow]]
+function applyBottomRightShadow(baseCanvas, offsetX = 1, offsetY = 1) {
+  if (baseCanvas.length === 0) {
+    return baseCanvas;
+  }
+
+  const height = baseCanvas.length;
+  const width = baseCanvas[0].length;
+  const outHeight = height + offsetY;
+  const outWidth = width + offsetX;
+
+  const isBaseFilled = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      return false;
+    }
+    return baseCanvas[y][x] === '█';
+  };
+
+  const shadowMask = Array.from({ length: outHeight }, () =>
+    Array(outWidth).fill(false),
+  );
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!isBaseFilled(x, y)) {
+        continue;
+      }
+
+      const shadowX = x + offsetX;
+      const shadowY = y + offsetY;
+      if (isBaseFilled(shadowX, shadowY)) {
+        continue;
+      }
+      shadowMask[shadowY][shadowX] = true;
+    }
+  }
+
+  const outCanvas = Array.from({ length: outHeight }, () =>
+    Array(outWidth).fill(' '),
+  );
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (baseCanvas[y][x] === '█') {
+        outCanvas[y][x] = '█';
+      }
+    }
+  }
+
+  const isShadowFilled = (x, y) => {
+    if (x < 0 || y < 0 || x >= outWidth || y >= outHeight) {
+      return false;
+    }
+    return shadowMask[y][x];
+  };
+
+  for (let y = 0; y < outHeight; y += 1) {
+    for (let x = 0; x < outWidth; x += 1) {
+      if (!shadowMask[y][x]) {
+        continue;
+      }
+      if (outCanvas[y][x] === '█') {
+        continue;
+      }
+
+      const connections = {
+        up: isShadowFilled(x, y - 1),
+        right: isShadowFilled(x + 1, y),
+        down: isShadowFilled(x, y + 1),
+        left: isShadowFilled(x - 1, y),
+      };
+      outCanvas[y][x] = boxCharForConnections(connections);
+    }
+  }
+
+  return outCanvas;
+}
+
+function renderCanvas(canvas) {
   return canvas.map((row) => row.join('').replace(/\s+$/g, '')).join('\n');
 }
 
+function renderBlockText(input, options = {}) {
+  const baseCanvas = buildBlockCanvas(input, options);
+  const withShadow = options.shadow
+    ? applyBottomRightShadow(baseCanvas, 1, 1)
+    : baseCanvas;
+  return renderCanvas(withShadow);
+}
+
 function printUsage() {
-  console.log('Usage: node scripts/ascii-block-text.js "Your Text" [--gap 1]');
+  console.log(
+    'Usage: node scripts/ascii-block-text.js "Your Text" [--gap 1] [--shadow]',
+  );
 }
 
 function parseArgs(argv) {
   const args = [...argv];
   let gap = 1;
+  let shadow = false;
   const textParts = [];
 
   for (let i = 0; i < args.length; i += 1) {
@@ -394,12 +524,18 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === '--shadow') {
+      shadow = true;
+      continue;
+    }
+
     textParts.push(arg);
   }
 
   return {
     help: false,
     gap,
+    shadow,
     text: textParts.join(' '),
   };
 }
@@ -419,7 +555,10 @@ function main() {
     process.exit(parsed.help ? 0 : 1);
   }
 
-  const output = renderBlockText(parsed.text, { gap: parsed.gap });
+  const output = renderBlockText(parsed.text, {
+    gap: parsed.gap,
+    shadow: parsed.shadow,
+  });
   console.log(output);
 }
 
