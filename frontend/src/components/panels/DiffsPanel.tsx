@@ -193,7 +193,14 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       });
 
       try {
+        const startedAt = performance.now();
         const fullDiff = await attemptsApi.getDiffFile(attemptId, path);
+        const fetchMs = performance.now() - startedAt;
+        if (fetchMs > 150) {
+          console.debug(
+            `[diff-timing] fetched ${path} in ${fetchMs.toFixed(1)}ms`
+          );
+        }
         setLoadedDiffs((prev) => ({
           ...prev,
           [id]: {

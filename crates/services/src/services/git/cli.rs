@@ -20,6 +20,7 @@ use std::{
     io::Write as _,
     path::Path,
     process::{Command, Stdio},
+    time::Instant,
 };
 
 use thiserror::Error;
@@ -146,6 +147,7 @@ impl GitCli {
         base_commit: &Commit,
         opts: StatusDiffOptions,
     ) -> Result<Vec<StatusDiffEntry>, GitCliError> {
+        let started_at = Instant::now();
         // Create a temp index file
         let tmp_dir = tempfile::TempDir::new()
             .map_err(|e| GitCliError::CommandFailed(format!("temp dir create failed: {e}")))?;
@@ -175,6 +177,7 @@ impl GitCli {
         }
 
         if !paths_to_add.is_empty() {
+            let stage_started_at = Instant::now();
             paths_to_add.extend(
                 Self::get_default_pathspec_excludes()
                     .iter()
@@ -192,6 +195,11 @@ impl GitCli {
                 OsString::from("--pathspec-file-nul"),
             ];
             self.git_with_stdin(worktree_path, args, Some(&envs), &input)?;
+            tracing::debug!(
+                stage_ms = stage_started_at.elapsed().as_millis(),
+                path_filter_count = opts.path_filter.as_ref().map(|p| p.len()).unwrap_or(0),
+                "diff-status staged paths"
+            );
         }
         // git diff --cached
         let mut args: Vec<OsString> = vec![
@@ -224,6 +232,13 @@ impl GitCli {
             entry.additions = additions;
             entry.deletions = deletions;
         }
+
+        tracing::debug!(
+            total_ms = started_at.elapsed().as_millis(),
+            file_count = entries.len(),
+            path_filter_count = opts.path_filter.as_ref().map(|p| p.len()).unwrap_or(0),
+            "diff-status timing"
+        );
 
         Ok(entries)
     }

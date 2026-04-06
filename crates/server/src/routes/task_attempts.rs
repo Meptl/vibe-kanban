@@ -4,6 +4,7 @@ pub mod drafts;
 pub mod images;
 pub mod queue;
 pub mod util;
+use std::time::Instant;
 
 use axum::{
     Extension, Json, Router,
@@ -236,6 +237,7 @@ pub async fn get_task_attempt_diff_file(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<Diff>>, ApiError> {
     // @lat: [[lazy-diff-loading#On-Demand File Content Fetch]]
+    let started_at = Instant::now();
     let pool = &deployment.db().pool;
     let file_path = query.path;
 
@@ -261,6 +263,7 @@ pub async fn get_task_attempt_diff_file(
     let path_filter = [file_path.as_str()];
     let latest_merge_commit = latest_merge.as_ref().map(Merge::merge_commit);
 
+    let before_diff_fetch = Instant::now();
     let diffs = if let Some(commit) = latest_merge_commit
         && deployment
             .container()
@@ -292,6 +295,7 @@ pub async fn get_task_attempt_diff_file(
             DiffDetailLevel::FullContent,
         )?
     };
+    let diff_fetch_ms = before_diff_fetch.elapsed().as_millis();
 
     let diff = diffs
         .into_iter()
@@ -301,6 +305,15 @@ pub async fn get_task_attempt_diff_file(
                 "Diff file not found".to_string(),
             ))
         })?;
+
+    let total_ms = started_at.elapsed().as_millis();
+    tracing::info!(
+        attempt_id = %task_attempt.id,
+        path = %file_path,
+        diff_fetch_ms,
+        total_ms,
+        "diff-file timing"
+    );
 
     Ok(ResponseJson(ApiResponse::success(diff)))
 }

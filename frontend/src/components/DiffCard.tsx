@@ -127,6 +127,7 @@ function DiffCard({
   const diffFile = useMemo(() => {
     if (isContentEqual || isOmitted || hasDeferredContent) return null;
     try {
+      const startedAt = performance.now();
       const oldFileName = oldName || newName || 'unknown';
       const newFileName = newName || oldName || 'unknown';
       const file = generateDiffFile(
@@ -139,6 +140,12 @@ function DiffCard({
         diffOptions
       );
       file.initRaw();
+      const parseMs = performance.now() - startedAt;
+      if (parseMs > 80) {
+        console.debug(
+          `[diff-timing] parsed ${newFileName} in ${parseMs.toFixed(1)}ms`
+        );
+      }
       return file;
     } catch (e) {
       console.error('Failed to build diff for view', e);
