@@ -49,6 +49,7 @@ import {
   OpenEditorRequest,
   QueueStatus,
   DraftFollowUpData,
+  Diff,
 } from 'shared/types';
 
 export class ApiError<E = unknown> extends Error {
@@ -480,6 +481,13 @@ export const attemptsApi = {
       }
     );
     return handleApiResponse<void>(response);
+  },
+
+  getDiffFile: async (attemptId: string, path: string): Promise<Diff> => {
+    const response = await makeRequest(
+      `/api/task-attempts/${attemptId}/diff/file?path=${encodeURIComponent(path)}`
+    );
+    return handleApiResponse<Diff>(response);
   },
 
 };

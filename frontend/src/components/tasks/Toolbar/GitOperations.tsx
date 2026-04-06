@@ -130,12 +130,7 @@ function GitOperations({
       (branchStatus.uncommitted_count ?? 0) > 0 ||
       (branchStatus.untracked_count ?? 0) > 0;
     return hasCommittedAhead || hasUncommitted;
-  }, [
-    branchStatus?.commits_ahead,
-    branchStatus?.has_uncommitted_changes,
-    branchStatus?.uncommitted_count,
-    branchStatus?.untracked_count,
-  ]);
+  }, [branchStatus]);
 
   const handleMergeClick = async () => {
     // Directly perform merge without checking branch status

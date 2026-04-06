@@ -143,6 +143,12 @@ pub enum DiffTarget<'p> {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffDetailLevel {
+    MetadataOnly,
+    FullContent,
+}
+
 impl Default for GitService {
     fn default() -> Self {
         Self::new()
@@ -294,6 +300,7 @@ impl GitService {
         &self,
         target: DiffTarget,
         path_filter: Option<&[&str]>,
+        detail_level: DiffDetailLevel,
     ) -> Result<Vec<Diff>, GitServiceError> {
         match target {
             DiffTarget::Worktree {
@@ -322,7 +329,7 @@ impl GitService {
                     })?;
                 Ok(entries
                     .into_iter()
-                    .map(|e| Self::status_entry_to_diff(&repo, &base_tree, e))
+                    .map(|e| Self::status_entry_to_diff(&repo, &base_tree, e, detail_level))
                     .collect())
             }
             DiffTarget::Branch {
@@ -360,7 +367,7 @@ impl GitService {
                 let mut find_opts = DiffFindOptions::new();
                 diff.find_similar(Some(&mut find_opts))?;
 
-                self.convert_diff_to_file_diffs(diff, &repo)
+                self.convert_diff_to_file_diffs(diff, &repo, detail_level)
             }
             DiffTarget::Commit {
                 repo_path,
@@ -405,7 +412,7 @@ impl GitService {
                 let mut find_opts = git2::DiffFindOptions::new();
                 diff.find_similar(Some(&mut find_opts))?;
 
-                self.convert_diff_to_file_diffs(diff, &repo)
+                self.convert_diff_to_file_diffs(diff, &repo, detail_level)
             }
         }
     }
@@ -415,8 +422,10 @@ impl GitService {
         &self,
         diff: git2::Diff,
         repo: &Repository,
+        detail_level: DiffDetailLevel,
     ) -> Result<Vec<Diff>, GitServiceError> {
         let mut file_diffs = Vec::new();
+        let include_contents = matches!(detail_level, DiffDetailLevel::FullContent);
 
         let mut delta_index: usize = 0;
         diff.foreach(
@@ -452,7 +461,7 @@ impl GitService {
                     }
                 }
 
-                // Only build old/new content if not omitted
+                // Only build old/new content when full content is requested and available.
                 let (old_path, old_content) = if matches!(status, Delta::Added) {
                     (None, None)
                 } else {
@@ -460,7 +469,7 @@ impl GitService {
                         .old_file()
                         .path()
                         .map(|p| p.to_string_lossy().to_string());
-                    if content_omitted {
+                    if content_omitted || !include_contents {
                         (path_opt, None)
                     } else {
                         let details = delta
@@ -481,7 +490,7 @@ impl GitService {
                         .new_file()
                         .path()
                         .map(|p| p.to_string_lossy().to_string());
-                    if content_omitted {
+                    if content_omitted || !include_contents {
                         (path_opt, None)
                     } else {
                         let details = delta
@@ -506,7 +515,8 @@ impl GitService {
                 };
 
                 // Detect pure mode changes (e.g., chmod +/-x) and classify as PermissionChange
-                if matches!(status, Delta::Modified)
+                if include_contents
+                    && matches!(status, Delta::Modified)
                     && delta.old_file().mode() != delta.new_file().mode()
                 {
                     // Only downgrade to PermissionChange if we KNOW content is unchanged
@@ -517,7 +527,8 @@ impl GitService {
                 }
 
                 // Treat non-text/unrenderable diffs as omitted to avoid misleading +0/-0 stats.
-                if !content_omitted
+                if include_contents
+                    && !content_omitted
                     && old_content.is_none()
                     && new_content.is_none()
                     && !matches!(change, DiffChangeKind::PermissionChange)
@@ -525,12 +536,11 @@ impl GitService {
                     content_omitted = true;
                 }
 
-                // If contents are omitted, try to compute line stats via libgit2 Patch.
-                // Keep stats absent when both sides are non-text/unrenderable.
+                // Always try to compute line stats via libgit2 patch when contents are
+                // omitted/deferred so metadata-only responses still provide summary totals.
                 let mut additions: Option<usize> = None;
                 let mut deletions: Option<usize> = None;
-                if content_omitted
-                    && !(old_content.is_none() && new_content.is_none())
+                if (content_omitted || !include_contents)
                     && let Ok(Some(patch)) = git2::Patch::from_diff(&diff, delta_index)
                     && let Ok((_ctx, adds, dels)) = patch.line_stats()
                 {
@@ -654,7 +664,13 @@ impl GitService {
 
     /// Create Diff entries from git_cli::StatusDiffEntry
     /// New Diff format is flattened with change kind, paths, and optional contents.
-    fn status_entry_to_diff(repo: &Repository, base_tree: &git2::Tree, e: StatusDiffEntry) -> Diff {
+    fn status_entry_to_diff(
+        repo: &Repository,
+        base_tree: &git2::Tree,
+        e: StatusDiffEntry,
+        detail_level: DiffDetailLevel,
+    ) -> Diff {
+        let include_contents = matches!(detail_level, DiffDetailLevel::FullContent);
         // Map ChangeType to DiffChangeKind
         let mut change = match e.change {
             ChangeType::Added => DiffChangeKind::Added,
@@ -705,8 +721,8 @@ impl GitService {
             }
         }
 
-        // Load contents only if not omitted
-        let (old_content, new_content) = if content_omitted {
+        // Load contents only when requested and not omitted.
+        let (old_content, new_content) = if content_omitted || !include_contents {
             (None, None)
         } else {
             // Load old content from base tree if possible
@@ -734,7 +750,8 @@ impl GitService {
         };
 
         // If reported as Modified but content is identical, treat as a permission-only change
-        if matches!(change, DiffChangeKind::Modified)
+        if include_contents
+            && matches!(change, DiffChangeKind::Modified)
             && old_content.is_some()
             && new_content.is_some()
             && old_content == new_content
@@ -744,7 +761,8 @@ impl GitService {
 
         // Treat non-text/unrenderable diffs as omitted so UI warning/omission
         // handling is used instead of displaying +0/-0.
-        if !content_omitted
+        if include_contents
+            && !content_omitted
             && old_content.is_none()
             && new_content.is_none()
             && !matches!(change, DiffChangeKind::PermissionChange)
@@ -759,8 +777,8 @@ impl GitService {
             old_content,
             new_content,
             content_omitted,
-            additions: None,
-            deletions: None,
+            additions: e.additions,
+            deletions: e.deletions,
         }
     }
 

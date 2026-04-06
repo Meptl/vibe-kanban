@@ -10,10 +10,6 @@ type DiffStreamEvent = {
   entries: DiffEntries;
 };
 
-export interface UseDiffStreamOptions {
-  statsOnly?: boolean;
-}
-
 interface UseDiffStreamResult {
   diffs: Diff[];
   error: string | null;
@@ -21,19 +17,11 @@ interface UseDiffStreamResult {
 
 export const useDiffStream = (
   attemptId: string | null,
-  enabled: boolean,
-  options?: UseDiffStreamOptions
+  enabled: boolean
 ): UseDiffStreamResult => {
   const endpoint = (() => {
     if (!attemptId) return undefined;
-    const query = `/api/task-attempts/${attemptId}/diff/ws`;
-    if (typeof options?.statsOnly === 'boolean') {
-      const params = new URLSearchParams();
-      params.set('stats_only', String(options.statsOnly));
-      return `${query}?${params.toString()}`;
-    } else {
-      return query;
-    }
+    return `/api/task-attempts/${attemptId}/diff/ws`;
   })();
 
   const initialData = useCallback(

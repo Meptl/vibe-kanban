@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs, io,
     path::{Path, PathBuf},
-    sync::{Arc, atomic::AtomicUsize},
+    sync::Arc,
     time::Duration,
 };
 
@@ -49,7 +49,7 @@ use services::services::{
     config::Config,
     container::{ContainerError, ContainerRef, ContainerService},
     diff_stream::{self, DiffStreamHandle},
-    git::{Commit, DiffTarget, GitService},
+    git::{Commit, DiffDetailLevel, DiffTarget, GitService},
     image::ImageService,
     notification::NotificationService,
     queued_message::QueuedMessageService,
@@ -718,7 +718,6 @@ impl LocalContainerService {
         &self,
         project_repo_path: &Path,
         merge_commit_id: &str,
-        stats_only: bool,
     ) -> Result<DiffStreamHandle, ContainerError> {
         let diffs = self.git().get_diffs(
             DiffTarget::Commit {
@@ -726,16 +725,10 @@ impl LocalContainerService {
                 commit_sha: merge_commit_id,
             },
             None,
+            DiffDetailLevel::MetadataOnly,
         )?;
 
-        let cum = Arc::new(AtomicUsize::new(0));
-        let diffs: Vec<_> = diffs
-            .into_iter()
-            .map(|mut d| {
-                diff_stream::apply_stream_omit_policy(&mut d, &cum, stats_only);
-                d
-            })
-            .collect();
+        let diffs: Vec<_> = diffs.into_iter().collect();
 
         let stream = futures::stream::iter(diffs.into_iter().map(|diff| {
             let entry_index = GitService::diff_path(&diff);
@@ -758,14 +751,12 @@ impl LocalContainerService {
         worktree_path: &Path,
         base_commit: &Commit,
         target_branch: &str,
-        stats_only: bool,
     ) -> Result<DiffStreamHandle, ContainerError> {
         diff_stream::create(
             self.git().clone(),
             worktree_path.to_path_buf(),
             base_commit.clone(),
             Some(target_branch.to_string()),
-            stats_only,
         )
         .await
         .map_err(|e| ContainerError::Other(anyhow!("{e}")))
@@ -1300,7 +1291,6 @@ impl ContainerService for LocalContainerService {
     async fn stream_diff(
         &self,
         task_attempt: &TaskAttempt,
-        stats_only: bool,
     ) -> Result<futures::stream::BoxStream<'static, Result<LogMsg, std::io::Error>>, ContainerError>
     {
         let project_repo_path = self.get_project_repo_path(task_attempt).await?;
@@ -1322,8 +1312,7 @@ impl ContainerService for LocalContainerService {
             && !is_ahead
         {
             let commit = merge.merge_commit();
-            let wrapper =
-                self.create_merged_diff_stream(&project_repo_path, &commit, stats_only)?;
+            let wrapper = self.create_merged_diff_stream(&project_repo_path, &commit)?;
             return Ok(Box::pin(wrapper));
         }
 
@@ -1336,12 +1325,7 @@ impl ContainerService for LocalContainerService {
         )?;
 
         let wrapper = self
-            .create_live_diff_stream(
-                &worktree_path,
-                &base_commit,
-                &task_attempt.target_branch,
-                stats_only,
-            )
+            .create_live_diff_stream(&worktree_path, &base_commit, &task_attempt.target_branch)
             .await?;
         Ok(Box::pin(wrapper))
     }

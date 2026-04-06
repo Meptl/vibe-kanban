@@ -1,7 +1,13 @@
 import { Diff } from 'shared/types';
 import { DiffModeEnum, DiffView, SplitSide } from '@git-diff-view/react';
 import { generateDiffFile, type DiffFile } from '@git-diff-view/file';
-import { useEffect, useMemo, useRef, type ComponentProps } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  type ComponentProps,
+} from 'react';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { getHighLightLanguageFromPath } from '@/utils/extToLanguage';
 import { getActualTheme } from '@/utils/theme';
@@ -47,6 +53,7 @@ type Props = {
   expanded: boolean;
   onToggle: () => void;
   selectedAttempt: TaskAttempt | null;
+  loadingContent?: boolean;
 };
 
 function labelAndIcon(diff: Diff) {
@@ -80,11 +87,12 @@ function readPlainLine(
   }
 }
 
-export default function DiffCard({
+function DiffCard({
   diff,
   expanded,
   onToggle,
   selectedAttempt,
+  loadingContent = false,
 }: Props) {
   const { config } = useUserSystem();
   const theme = getActualTheme(config?.theme);
@@ -102,11 +110,14 @@ export default function DiffCard({
     getHighLightLanguageFromPath(newName || oldName || '') || 'plaintext';
   const { label, Icon } = labelAndIcon(diff);
   const isOmitted = !!diff.contentOmitted;
+  const hasLoadedContent = diff.oldContent !== null || diff.newContent !== null;
+  const hasDeferredContent =
+    !isOmitted && !hasLoadedContent && diff.change !== 'permissionChange';
 
   // Build a diff from raw contents so the viewer can expand beyond hunks
   const oldContentSafe = diff.oldContent || '';
   const newContentSafe = diff.newContent || '';
-  const isContentEqual = oldContentSafe === newContentSafe;
+  const isContentEqual = hasLoadedContent && oldContentSafe === newContentSafe;
 
   const diffOptions = useMemo(
     () => (ignoreWhitespace ? { ignoreWhitespace: true as const } : undefined),
@@ -114,7 +125,7 @@ export default function DiffCard({
   );
 
   const diffFile = useMemo(() => {
-    if (isContentEqual || isOmitted) return null;
+    if (isContentEqual || isOmitted || hasDeferredContent) return null;
     try {
       const oldFileName = oldName || newName || 'unknown';
       const newFileName = newName || oldName || 'unknown';
@@ -136,6 +147,7 @@ export default function DiffCard({
   }, [
     isContentEqual,
     isOmitted,
+    hasDeferredContent,
     oldName,
     newName,
     oldLang,
@@ -370,7 +382,9 @@ export default function DiffCard({
           className="px-4 pb-4 text-xs font-mono"
           style={{ color: 'hsl(var(--muted-foreground) / 0.9)' }}
         >
-          {isOmitted
+          {loadingContent || hasDeferredContent
+            ? 'Loading diff content...'
+            : isOmitted
             ? 'Content omitted or not renderable as a text diff. Open in editor to view.'
             : isContentEqual
               ? diff.change === 'renamed'
@@ -384,3 +398,24 @@ export default function DiffCard({
     </div>
   );
 }
+
+function areDiffCardsEqual(prev: Props, next: Props): boolean {
+  if (prev.expanded !== next.expanded) return false;
+  if (prev.loadingContent !== next.loadingContent) return false;
+  if (prev.selectedAttempt?.id !== next.selectedAttempt?.id) return false;
+
+  const a = prev.diff;
+  const b = next.diff;
+  return (
+    a.change === b.change &&
+    a.oldPath === b.oldPath &&
+    a.newPath === b.newPath &&
+    a.oldContent === b.oldContent &&
+    a.newContent === b.newContent &&
+    a.contentOmitted === b.contentOmitted &&
+    a.additions === b.additions &&
+    a.deletions === b.deletions
+  );
+}
+
+export default memo(DiffCard, areDiffCardsEqual);

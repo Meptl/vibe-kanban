@@ -38,7 +38,7 @@ use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::{
     container::ContainerService,
-    git::{ConflictOp, DiffTarget, WorktreeResetOptions},
+    git::{ConflictOp, DiffDetailLevel, DiffTarget, GitService, WorktreeResetOptions},
 };
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
@@ -72,10 +72,9 @@ pub struct TaskAttemptQuery {
     pub task_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct DiffStreamQuery {
-    #[serde(default)]
-    pub stats_only: bool,
+#[derive(Debug, Deserialize, TS)]
+pub struct DiffFileQuery {
+    pub path: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -202,6 +201,7 @@ pub async fn get_task_attempt_diff(
                 commit_sha: &commit,
             },
             None,
+            DiffDetailLevel::FullContent,
         )?
     } else {
         let worktree_path_buf = ensure_worktree_path(&deployment, &task_attempt).await?;
@@ -216,6 +216,7 @@ pub async fn get_task_attempt_diff(
                 base_commit: &base_commit,
             },
             None,
+            DiffDetailLevel::FullContent,
         )?
     };
 
@@ -227,6 +228,81 @@ pub async fn get_task_attempt_diff(
             omitted_files: built.omitted_files,
         },
     )))
+}
+
+pub async fn get_task_attempt_diff_file(
+    Query(query): Query<DiffFileQuery>,
+    Extension(task_attempt): Extension<TaskAttempt>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<Diff>>, ApiError> {
+    // @lat: [[lazy-diff-loading#On-Demand File Content Fetch]]
+    let pool = &deployment.db().pool;
+    let file_path = query.path;
+
+    let task = task_attempt
+        .parent_task(pool)
+        .await?
+        .ok_or(ApiError::TaskAttempt(TaskAttemptError::TaskNotFound))?;
+    let ctx = TaskAttempt::load_context(pool, task_attempt.id, task.id, task.project_id).await?;
+
+    let project_repo_path = &ctx.project.git_repo_path;
+    let latest_merge = Merge::find_latest_by_task_attempt_id(pool, task_attempt.id).await?;
+
+    let is_ahead = deployment
+        .git()
+        .get_branch_status(
+            project_repo_path,
+            &task_attempt.branch,
+            &task_attempt.target_branch,
+        )
+        .map(|(ahead, _)| ahead > 0)
+        .unwrap_or(false);
+
+    let path_filter = [file_path.as_str()];
+    let latest_merge_commit = latest_merge.as_ref().map(Merge::merge_commit);
+
+    let diffs = if let Some(commit) = latest_merge_commit
+        && deployment
+            .container()
+            .is_container_clean(&task_attempt)
+            .await?
+        && !is_ahead
+    {
+        deployment.git().get_diffs(
+            DiffTarget::Commit {
+                repo_path: project_repo_path,
+                commit_sha: &commit,
+            },
+            Some(&path_filter),
+            DiffDetailLevel::FullContent,
+        )?
+    } else {
+        let worktree_path_buf = ensure_worktree_path(&deployment, &task_attempt).await?;
+        let base_commit = deployment.git().get_base_commit(
+            project_repo_path,
+            &task_attempt.branch,
+            &task_attempt.target_branch,
+        )?;
+        deployment.git().get_diffs(
+            DiffTarget::Worktree {
+                worktree_path: worktree_path_buf.as_path(),
+                base_commit: &base_commit,
+            },
+            Some(&path_filter),
+            DiffDetailLevel::FullContent,
+        )?
+    };
+
+    let diff = diffs
+        .into_iter()
+        .find(|d| GitService::diff_path(d) == file_path)
+        .ok_or_else(|| {
+            ApiError::TaskAttempt(TaskAttemptError::ValidationError(
+                "Diff file not found".to_string(),
+            ))
+        })?;
+
+    Ok(ResponseJson(ApiResponse::success(diff)))
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -483,15 +559,11 @@ pub async fn follow_up(
 #[axum::debug_handler]
 pub async fn stream_task_attempt_diff_ws(
     ws: WebSocketUpgrade,
-    Query(params): Query<DiffStreamQuery>,
     Extension(task_attempt): Extension<TaskAttempt>,
     State(deployment): State<DeploymentImpl>,
 ) -> impl IntoResponse {
-    let stats_only = params.stats_only;
     ws.on_upgrade(move |socket| async move {
-        if let Err(e) =
-            handle_task_attempt_diff_ws(socket, deployment, task_attempt, stats_only).await
-        {
+        if let Err(e) = handle_task_attempt_diff_ws(socket, deployment, task_attempt).await {
             tracing::warn!("diff WS closed: {}", e);
         }
     })
@@ -501,15 +573,11 @@ async fn handle_task_attempt_diff_ws(
     socket: WebSocket,
     deployment: DeploymentImpl,
     task_attempt: TaskAttempt,
-    stats_only: bool,
 ) -> anyhow::Result<()> {
     use futures_util::{SinkExt, StreamExt, TryStreamExt};
     use utils::log_msg::LogMsg;
 
-    let stream = deployment
-        .container()
-        .stream_diff(&task_attempt, stats_only)
-        .await?;
+    let stream = deployment.container().stream_diff(&task_attempt).await?;
 
     let mut stream = stream.map_ok(|msg: LogMsg| msg.to_ws_message_unchecked());
 
@@ -1208,6 +1276,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     let task_attempt_id_router = Router::new()
         .route("/", get(get_task_attempt))
         .route("/diff", get(get_task_attempt_diff))
+        .route("/diff/file", get(get_task_attempt_diff_file))
         .route("/follow-up", post(follow_up))
         .route("/run-agent-setup", post(run_agent_setup))
         .route("/commit-compare", get(compare_commit_to_head))

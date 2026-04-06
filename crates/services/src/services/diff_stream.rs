@@ -2,10 +2,7 @@ use std::{
     collections::HashSet,
     io,
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::Arc,
 };
 
 use executors::logs::utils::{ConversationPatch, patch::escape_json_pointer_segment};
@@ -14,18 +11,12 @@ use notify_debouncer_full::DebouncedEvent;
 use thiserror::Error;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
-use utils::{
-    diff::{self, Diff},
-    log_msg::LogMsg,
-};
+use utils::{diff::Diff, log_msg::LogMsg};
 
 use crate::services::{
     filesystem_watcher::{self, FilesystemWatcherError},
-    git::{Commit, DiffTarget, GitService, GitServiceError},
+    git::{Commit, DiffDetailLevel, DiffTarget, GitService, GitServiceError},
 };
-
-/// Maximum cumulative diff bytes to stream before omitting content (200MB)
-pub const MAX_CUMULATIVE_DIFF_BYTES: usize = 200 * 1024 * 1024;
 
 const DIFF_STREAM_CHANNEL_CAPACITY: usize = 1000;
 
@@ -85,9 +76,7 @@ struct DiffWatcherContext {
     worktree_path: PathBuf,
     base_commit: Commit,
     target_branch: Option<String>,
-    cumulative: Arc<AtomicUsize>,
     full_sent: Arc<std::sync::RwLock<HashSet<String>>>,
-    stats_only: bool,
     tx: mpsc::Sender<Result<LogMsg, io::Error>>,
 }
 
@@ -108,9 +97,7 @@ impl DiffWatcherContext {
         let worktree_path = self.worktree_path.clone();
         let base_commit = self.base_commit.clone();
         let target_branch = self.target_branch.clone();
-        let cumulative = self.cumulative.clone();
         let full_sent = self.full_sent.clone();
-        let stats_only = self.stats_only;
 
         match tokio::task::spawn_blocking(move || {
             process_file_changes(ProcessFileChangesInput {
@@ -119,9 +106,7 @@ impl DiffWatcherContext {
                 base_commit: &base_commit,
                 target_branch: target_branch.as_deref(),
                 changed_paths: &changed_paths,
-                cumulative_bytes: &cumulative,
                 full_sent_paths: &full_sent,
-                stats_only,
             })
         })
         .await
@@ -150,11 +135,9 @@ pub async fn create(
     worktree_path: PathBuf,
     base_commit: Commit,
     target_branch: Option<String>,
-    stats_only: bool,
 ) -> Result<DiffStreamHandle, DiffStreamError> {
     let (tx, rx) = mpsc::channel::<Result<LogMsg, io::Error>>(DIFF_STREAM_CHANNEL_CAPACITY);
 
-    let cumulative = Arc::new(AtomicUsize::new(0));
     let full_sent = Arc::new(std::sync::RwLock::new(HashSet::<String>::new()));
 
     // Spawn a task to fetch initial diffs and set up the file watcher.
@@ -169,6 +152,7 @@ pub async fn create(
         let target_branch_for_diff = target_branch.clone();
 
         let initial_diffs_result = tokio::task::spawn_blocking(move || {
+            // @lat: [[lazy-diff-loading#Metadata-First Diff Stream]]
             let effective_base = resolve_base_commit(
                 &git_for_diff,
                 &worktree_for_diff,
@@ -187,6 +171,7 @@ pub async fn create(
                     base_commit: &effective_base,
                 },
                 None,
+                DiffDetailLevel::MetadataOnly,
             )
         })
         .await;
@@ -206,8 +191,7 @@ pub async fn create(
         };
 
         let mut initial_diffs = Vec::with_capacity(initial_diffs_raw.len());
-        for mut diff in initial_diffs_raw {
-            apply_stream_omit_policy(&mut diff, &cumulative, stats_only);
+        for diff in initial_diffs_raw {
             initial_diffs.push(diff);
         }
 
@@ -254,9 +238,7 @@ pub async fn create(
             worktree_path,
             base_commit,
             target_branch,
-            cumulative,
             full_sent,
-            stats_only,
             tx: tx_clone,
         };
 
@@ -321,49 +303,6 @@ async fn send_error(tx: &mpsc::Sender<Result<LogMsg, io::Error>>, message: Strin
     let _ = tx.send(Err(io::Error::other(message))).await;
 }
 
-pub fn apply_stream_omit_policy(diff: &mut Diff, sent_bytes: &Arc<AtomicUsize>, stats_only: bool) {
-    if stats_only {
-        omit_diff_contents(diff);
-        return;
-    }
-
-    let mut size = 0usize;
-    if let Some(ref s) = diff.old_content {
-        size += s.len();
-    }
-    if let Some(ref s) = diff.new_content {
-        size += s.len();
-    }
-
-    if size == 0 {
-        return;
-    }
-
-    let current = sent_bytes.load(Ordering::Relaxed);
-    if current.saturating_add(size) > MAX_CUMULATIVE_DIFF_BYTES {
-        omit_diff_contents(diff);
-    } else {
-        let _ = sent_bytes.fetch_add(size, Ordering::Relaxed);
-    }
-}
-
-fn omit_diff_contents(diff: &mut Diff) {
-    if diff.additions.is_none()
-        && diff.deletions.is_none()
-        && (diff.old_content.is_some() || diff.new_content.is_some())
-    {
-        let old = diff.old_content.as_deref().unwrap_or("");
-        let new = diff.new_content.as_deref().unwrap_or("");
-        let (add, del) = diff::compute_line_change_counts(old, new);
-        diff.additions = Some(add);
-        diff.deletions = Some(del);
-    }
-
-    diff.old_content = None;
-    diff.new_content = None;
-    diff.content_omitted = true;
-}
-
 fn extract_changed_paths(
     events: &[DebouncedEvent],
     canonical_worktree_path: &Path,
@@ -388,9 +327,7 @@ struct ProcessFileChangesInput<'a> {
     base_commit: &'a Commit,
     target_branch: Option<&'a str>,
     changed_paths: &'a [String],
-    cumulative_bytes: &'a Arc<AtomicUsize>,
     full_sent_paths: &'a Arc<std::sync::RwLock<HashSet<String>>>,
-    stats_only: bool,
 }
 
 fn process_file_changes(
@@ -402,9 +339,7 @@ fn process_file_changes(
         base_commit,
         target_branch,
         changed_paths,
-        cumulative_bytes,
         full_sent_paths,
-        stats_only,
     } = input;
 
     let path_filter: Vec<&str> = changed_paths.iter().map(|s| s.as_str()).collect();
@@ -423,16 +358,15 @@ fn process_file_changes(
             base_commit: &effective_base,
         },
         Some(&path_filter),
+        DiffDetailLevel::MetadataOnly,
     )?;
 
     let mut msgs = Vec::new();
     let mut files_with_diffs = HashSet::new();
 
-    for mut diff in current_diffs {
+    for diff in current_diffs {
         let file_path = GitService::diff_path(&diff);
         files_with_diffs.insert(file_path.clone());
-        apply_stream_omit_policy(&mut diff, cumulative_bytes, stats_only);
-
         if diff.content_omitted {
             if full_sent_paths.read().unwrap().contains(&file_path) {
                 continue;

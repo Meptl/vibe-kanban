@@ -63,6 +63,8 @@ pub struct StatusDiffEntry {
     pub change: ChangeType,
     pub path: String,
     pub old_path: Option<String>,
+    pub additions: Option<usize>,
+    pub deletions: Option<usize>,
 }
 
 /// Parsed worktree entry from `git worktree list --porcelain`
@@ -156,16 +158,22 @@ impl GitCli {
         // Use a temp index from HEAD to accurately track renames in untracked files
         let _ = self.git_with_env(worktree_path, ["read-tree", "HEAD"], &envs)?;
 
-        // Stage changed and untracked files explicitly, which is faster than `git add -A` for large repos.
-        // Use raw paths from `get_worktree_status` to avoid lossy UTF-8 conversions for odd filenames.
-        let status = self.get_worktree_status(worktree_path)?;
+        // Stage only requested paths when path_filter is provided, otherwise stage
+        // all changed/untracked paths from status output.
         let mut paths_to_add: Vec<Vec<u8>> = Vec::new();
-        for entry in status.entries {
-            paths_to_add.push(entry.path);
-            if let Some(orig) = entry.orig_path {
-                paths_to_add.push(orig);
+        if let Some(filters) = opts.path_filter.as_ref() {
+            paths_to_add.extend(filters.iter().map(|p| p.as_bytes().to_vec()));
+        } else {
+            // Use raw status paths to preserve non-UTF8 filenames.
+            let status = self.get_worktree_status(worktree_path)?;
+            for entry in status.entries {
+                paths_to_add.push(entry.path);
+                if let Some(orig) = entry.orig_path {
+                    paths_to_add.push(orig);
+                }
             }
         }
+
         if !paths_to_add.is_empty() {
             paths_to_add.extend(
                 Self::get_default_pathspec_excludes()
@@ -197,7 +205,27 @@ impl GitCli {
         ];
         args = Self::apply_pathspec_filter(args, opts.path_filter.as_ref());
         let out = self.git_with_env(worktree_path, args, &envs)?;
-        Ok(Self::parse_name_status(&out))
+        let mut entries = Self::parse_name_status(&out);
+
+        for entry in &mut entries {
+            let numstat_args = Self::apply_pathspec_filter(
+                vec![
+                    "-c".into(),
+                    "core.quotepath=false".into(),
+                    "diff".into(),
+                    "--cached".into(),
+                    "--numstat".into(),
+                    OsString::from(base_commit.to_string()),
+                ],
+                Some(&vec![entry.path.clone()]),
+            );
+            let numstat_output = self.git_with_env(worktree_path, numstat_args, &envs)?;
+            let (additions, deletions) = Self::parse_numstat_totals(&numstat_output);
+            entry.additions = additions;
+            entry.deletions = deletions;
+        }
+
+        Ok(entries)
     }
 
     /// Return `git status --porcelain` parsed into a structured summary
@@ -456,6 +484,8 @@ impl GitCli {
                             change,
                             path: newp.to_string(),
                             old_path: Some(old.to_string()),
+                            additions: None,
+                            deletions: None,
                         });
                     }
                 }
@@ -465,12 +495,50 @@ impl GitCli {
                             change,
                             path: p.to_string(),
                             old_path: None,
+                            additions: None,
+                            deletions: None,
                         });
                     }
                 }
             }
         }
         out
+    }
+
+    fn parse_numstat_totals(output: &str) -> (Option<usize>, Option<usize>) {
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+        let mut parsed_any = false;
+        let mut saw_binary = false;
+
+        for line in output.lines() {
+            let mut parts = line.split('\t');
+            let Some(add) = parts.next() else { continue };
+            let Some(del) = parts.next() else { continue };
+
+            if add == "-" || del == "-" {
+                saw_binary = true;
+                continue;
+            }
+
+            let Ok(add_num) = add.parse::<usize>() else {
+                continue;
+            };
+            let Ok(del_num) = del.parse::<usize>() else {
+                continue;
+            };
+            additions += add_num;
+            deletions += del_num;
+            parsed_any = true;
+        }
+
+        if parsed_any {
+            (Some(additions), Some(deletions))
+        } else if saw_binary {
+            (None, None)
+        } else {
+            (Some(0), Some(0))
+        }
     }
 
     /// Return the merge base commit sha of two refs in the given worktree.

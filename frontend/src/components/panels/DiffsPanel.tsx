@@ -1,11 +1,18 @@
 import { useDiffStream } from '@/hooks/useDiffStream';
-import { useMemo, useCallback, useState, useEffect } from 'react';
+import {
+  useMemo,
+  useCallback,
+  useState,
+  useEffect,
+  useRef,
+  type RefObject,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader } from '@/components/ui/loader';
 import { Button } from '@/components/ui/button';
 import DiffViewSwitch from '@/components/DiffViewSwitch';
 import DiffCard from '@/components/DiffCard';
-import { useDiffSummary } from '@/hooks/useDiffSummary';
 import { NewCardHeader } from '@/components/ui/new-card';
 import { ChevronsUp, ChevronsDown, AlertTriangle } from 'lucide-react';
 import {
@@ -17,9 +24,30 @@ import {
 import type { TaskAttempt, Diff } from 'shared/types';
 import { generateDiffFile } from '@git-diff-view/file';
 import { getHighLightLanguageFromPath } from '@/utils/extToLanguage';
+import { attemptsApi } from '@/lib/api';
 
 interface DiffsPanelProps {
   selectedAttempt: TaskAttempt | null;
+}
+
+type LoadedDiffRecord = {
+  diff: Diff;
+  signature: string;
+};
+
+function getDiffId(diff: Diff, idx: number): string {
+  return diff.newPath || diff.oldPath || String(idx);
+}
+
+function getDiffSignature(diff: Diff): string {
+  return [
+    diff.change,
+    diff.oldPath || '',
+    diff.newPath || '',
+    diff.additions ?? 'na',
+    diff.deletions ?? 'na',
+    diff.contentOmitted ? '1' : '0',
+  ].join('|');
 }
 
 export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
@@ -27,14 +55,54 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   const [loading, setLoading] = useState(true);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
-  const { diffs, error } = useDiffStream(selectedAttempt?.id ?? null, true);
-  const { fileCount, added, deleted } = useDiffSummary(
-    selectedAttempt?.id ?? null
+  const [loadedDiffs, setLoadedDiffs] = useState<Record<string, LoadedDiffRecord>>(
+    {}
   );
+  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+
+  // @lat: [[lazy-diff-loading#Metadata-First Diff Stream]]
+  const { diffs, error } = useDiffStream(selectedAttempt?.id ?? null, true);
+
+  const metadataSignatures = useMemo(() => {
+    const map = new Map<string, string>();
+    diffs.forEach((diff, idx) => {
+      map.set(getDiffId(diff, idx), getDiffSignature(diff));
+    });
+    return map;
+  }, [diffs]);
+
+  const mergedDiffs = useMemo(() => {
+    return diffs.map((diff, idx) => {
+      const id = getDiffId(diff, idx);
+      const loaded = loadedDiffs[id];
+      const currentSig = metadataSignatures.get(id);
+      if (!loaded || loaded.signature !== currentSig) {
+        return diff;
+      }
+      return loaded.diff;
+    });
+  }, [diffs, loadedDiffs, metadataSignatures]);
+
+  const { fileCount, added, deleted } = useMemo(() => {
+    if (mergedDiffs.length === 0) {
+      return { fileCount: 0, added: 0, deleted: 0 };
+    }
+
+    return mergedDiffs.reduce(
+      (acc, d) => {
+        acc.added += d.additions ?? 0;
+        acc.deleted += d.deletions ?? 0;
+        return acc;
+      },
+      { fileCount: mergedDiffs.length, added: 0, deleted: 0 }
+    );
+  }, [mergedDiffs]);
 
   useEffect(() => {
     setLoading(true);
     setHasInitialized(false);
+    setLoadedDiffs({});
+    setLoadingIds(new Set());
   }, [selectedAttempt?.id]);
 
   useEffect(() => {
@@ -43,7 +111,6 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     }
   }, [diffs, loading]);
 
-  // If no diffs arrive within 3 seconds, stop showing the spinner
   useEffect(() => {
     if (!loading) return;
     const timer = setTimeout(() => {
@@ -54,10 +121,9 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     return () => clearTimeout(timer);
   }, [loading, diffs.length]);
 
-  // Default-collapse certain change kinds on first load only
   useEffect(() => {
-    if (diffs.length === 0) return;
-    if (hasInitialized) return; // only run once per attempt
+    if (diffs.length === 0 || hasInitialized) return;
+
     const kindsToCollapse = new Set([
       'deleted',
       'renamed',
@@ -67,15 +133,33 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     const initial = new Set(
       diffs
         .filter((d) => kindsToCollapse.has(d.change))
-        .map((d, i) => d.newPath || d.oldPath || String(i))
+        .map((d, i) => getDiffId(d, i))
     );
-    if (initial.size > 0) setCollapsedIds(initial);
+
+    if (initial.size > 0) {
+      setCollapsedIds(initial);
+    }
     setHasInitialized(true);
   }, [diffs, hasInitialized]);
 
+  useEffect(() => {
+    const validIds = new Set(diffs.map((diff, idx) => getDiffId(diff, idx)));
+    setLoadedDiffs((prev) => {
+      const next: Record<string, LoadedDiffRecord> = {};
+      for (const [id, loaded] of Object.entries(prev)) {
+        const signature = metadataSignatures.get(id);
+        if (!validIds.has(id) || signature !== loaded.signature) {
+          continue;
+        }
+        next[id] = loaded;
+      }
+      return next;
+    });
+  }, [diffs, metadataSignatures]);
+
   const ids = useMemo(() => {
-    return diffs.map((d, i) => d.newPath || d.oldPath || String(i));
-  }, [diffs]);
+    return mergedDiffs.map((d, i) => getDiffId(d, i));
+  }, [mergedDiffs]);
 
   const toggle = useCallback((id: string) => {
     setCollapsedIds((prev) => {
@@ -85,10 +169,50 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     });
   }, []);
 
-  const allCollapsed = collapsedIds.size === diffs.length;
+  const allCollapsed = collapsedIds.size === mergedDiffs.length;
   const handleCollapseAll = useCallback(() => {
     setCollapsedIds(allCollapsed ? new Set() : new Set(ids));
   }, [allCollapsed, ids]);
+
+  // @lat: [[lazy-diff-loading#On-Demand File Content Fetch]]
+  const ensureDiffContentLoaded = useCallback(
+    async (id: string, diff: Diff) => {
+      const attemptId = selectedAttempt?.id;
+      const path = diff.newPath || diff.oldPath;
+      if (!attemptId || !path || diff.contentOmitted) return;
+
+      const signature = metadataSignatures.get(id);
+      if (!signature) return;
+      if (loadedDiffs[id]?.signature === signature) return;
+      if (loadingIds.has(id)) return;
+
+      setLoadingIds((prev) => {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      });
+
+      try {
+        const fullDiff = await attemptsApi.getDiffFile(attemptId, path);
+        setLoadedDiffs((prev) => ({
+          ...prev,
+          [id]: {
+            diff: fullDiff,
+            signature,
+          },
+        }));
+      } catch (fetchError) {
+        console.error('Failed to load diff file content', path, fetchError);
+      } finally {
+        setLoadingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    },
+    [selectedAttempt?.id, metadataSignatures, loadedDiffs, loadingIds]
+  );
 
   if (error) {
     return (
@@ -102,7 +226,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
 
   return (
     <DiffsPanelContent
-      diffs={diffs}
+      diffs={mergedDiffs}
       fileCount={fileCount}
       added={added}
       deleted={deleted}
@@ -112,6 +236,8 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       toggle={toggle}
       selectedAttempt={selectedAttempt}
       loading={loading}
+      loadingIds={loadingIds}
+      ensureDiffContentLoaded={ensureDiffContentLoaded}
       t={t}
     />
   );
@@ -128,6 +254,8 @@ interface DiffsPanelContentProps {
   toggle: (id: string) => void;
   selectedAttempt: TaskAttempt | null;
   loading: boolean;
+  loadingIds: Set<string>;
+  ensureDiffContentLoaded: (id: string, diff: Diff) => Promise<void>;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
@@ -142,8 +270,12 @@ function DiffsPanelContent({
   toggle,
   selectedAttempt,
   loading,
+  loadingIds,
+  ensureDiffContentLoaded,
   t,
 }: DiffsPanelContentProps) {
+  const listRootRef = useRef<HTMLDivElement>(null);
+
   const errantFileCount = useMemo(() => {
     return diffs.reduce((count, diff) => {
       if (diff.contentOmitted) return count + 1;
@@ -245,7 +377,7 @@ function DiffsPanelContent({
           </div>
         </NewCardHeader>
       )}
-      <div className="flex-1 overflow-y-auto px-3">
+      <div ref={listRootRef} className="flex-1 overflow-y-auto px-3">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader />
@@ -256,19 +388,69 @@ function DiffsPanelContent({
           </div>
         ) : (
           diffs.map((diff, idx) => {
-            const id = diff.newPath || diff.oldPath || String(idx);
+            const id = getDiffId(diff, idx);
+            const isExpanded = !collapsedIds.has(id);
             return (
-              <DiffCard
+              <ViewportAwareRow
                 key={id}
-                diff={diff}
-                expanded={!collapsedIds.has(id)}
-                onToggle={() => toggle(id)}
-                selectedAttempt={selectedAttempt}
-              />
+                id={id}
+                rootRef={listRootRef}
+                onVisible={() => ensureDiffContentLoaded(id, diff)}
+              >
+                <DiffCard
+                  diff={diff}
+                  expanded={isExpanded}
+                  onToggle={() => {
+                    const willExpand = collapsedIds.has(id);
+                    toggle(id);
+                    if (willExpand) {
+                      void ensureDiffContentLoaded(id, diff);
+                    }
+                  }}
+                  selectedAttempt={selectedAttempt}
+                  loadingContent={loadingIds.has(id)}
+                />
+              </ViewportAwareRow>
             );
           })
         )}
       </div>
     </div>
   );
+}
+
+function ViewportAwareRow({
+  id,
+  rootRef,
+  onVisible,
+  children,
+}: {
+  id: string;
+  rootRef: RefObject<HTMLDivElement | null>;
+  onVisible: () => void;
+  children: ReactNode;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = rowRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onVisible();
+        }
+      },
+      {
+        root: rootRef.current,
+        rootMargin: '500px 0px',
+      }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [id, onVisible, rootRef]);
+
+  return <div ref={rowRef}>{children}</div>;
 }
