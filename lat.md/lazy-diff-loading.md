@@ -22,3 +22,11 @@ The viewport-triggered behavior is handled by [[frontend/src/components/panels/D
 The card renderer is memoized in [[frontend/src/components/DiffCard.tsx#DiffCard]] to avoid re-rendering unchanged cards as neighboring files finish loading.
 Deferred content detection treats both `null` and `undefined` as unloaded content so cards keep showing loading state until full file bodies are fetched.
 Timing logs are emitted on backend diff fetch and frontend fetch/parse paths to attribute latency between API work and rendering work.
+Viewport observers keep a stable subscription per row while invoking the latest visibility callback, avoiding full observer teardown/recreate cycles on each diff panel render.
+Diff cards short-circuit memo comparison when the diff object reference is unchanged so already-loaded large file contents are not repeatedly compared.
+Collapsed diff cards skip `generateDiffFile` parsing entirely and parse only after expansion, so loading metadata for many files does not precompute hidden diff views.
+
+## Metadata-Only Header Health Signals
+Diff header warnings now rely on streamed metadata flags instead of reparsing every file body, which prevents render-time main-thread spikes on large attempts.
+
+The omitted-file indicator in [[frontend/src/components/panels/DiffsPanel.tsx#DiffsPanelContent]] counts `contentOmitted` entries directly so summary rendering stays O(n) over metadata only.

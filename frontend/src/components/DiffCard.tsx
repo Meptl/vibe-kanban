@@ -134,7 +134,9 @@ function DiffCard({
   );
 
   const diffFile = useMemo(() => {
-    if (isContentEqual || isOmitted || hasDeferredContent) return null;
+    if (!expanded || isContentEqual || isOmitted || hasDeferredContent) {
+      return null;
+    }
     try {
       const startedAt = performance.now();
       const oldFileName = oldName || newName || 'unknown';
@@ -162,6 +164,7 @@ function DiffCard({
     }
   }, [
     isContentEqual,
+    expanded,
     isOmitted,
     hasDeferredContent,
     oldName,
@@ -439,6 +442,7 @@ function areDiffCardsEqual(prev: Props, next: Props): boolean {
   if (prev.expanded !== next.expanded) return false;
   if (prev.loadingContent !== next.loadingContent) return false;
   if (prev.selectedAttempt?.id !== next.selectedAttempt?.id) return false;
+  if (prev.diff === next.diff) return true;
 
   const a = prev.diff;
   const b = next.diff;
