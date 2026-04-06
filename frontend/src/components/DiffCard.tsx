@@ -14,6 +14,12 @@ import { getActualTheme } from '@/utils/theme';
 import { stripLineEnding } from '@/utils/string';
 import { Button } from '@/components/ui/button';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   ChevronRight,
   ChevronUp,
   Trash2,
@@ -24,6 +30,7 @@ import {
   Key,
   ExternalLink,
   MessageSquare,
+  AlertTriangle,
 } from 'lucide-react';
 import '@/styles/diff-style-overrides.css';
 import { attemptsApi } from '@/lib/api';
@@ -54,6 +61,7 @@ type Props = {
   onToggle: () => void;
   selectedAttempt: TaskAttempt | null;
   loadingContent?: boolean;
+  statsProcessed?: boolean;
 };
 
 function labelAndIcon(diff: Diff) {
@@ -93,6 +101,7 @@ function DiffCard({
   onToggle,
   selectedAttempt,
   loadingContent = false,
+  statsProcessed = false,
 }: Props) {
   const { config } = useUserSystem();
   const theme = getActualTheme(config?.theme);
@@ -164,9 +173,15 @@ function DiffCard({
     diffOptions,
   ]);
 
-  const add = isOmitted ? diff.additions : (diffFile?.additionLength ?? 0);
-  const del = isOmitted ? diff.deletions : (diffFile?.deletionLength ?? 0);
-  const showLineStats = !isOmitted || add !== null || del !== null;
+  const add = isOmitted ? diff.additions : diffFile?.additionLength;
+  const del = isOmitted ? diff.deletions : diffFile?.deletionLength;
+  const showLineStats = add != null || del != null;
+  const showBinaryStatsWarning =
+    statsProcessed &&
+    isOmitted &&
+    diff.change !== 'permissionChange' &&
+    add == null &&
+    del == null;
 
   // Review functionality
   const filePath = newName || oldName || 'unknown';
@@ -297,6 +312,20 @@ function DiffCard({
             -{del ?? 0}
           </span>
         </>
+      )}
+      {showBinaryStatsWarning && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="ml-2 inline-flex align-middle text-warning">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              Binary or non-text file; line stats are unavailable.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
       {commentsForFile.length > 0 && (
         <span className="ml-3 inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-primary/10 text-primary rounded">

@@ -59,6 +59,9 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     {}
   );
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [processedStatsIds, setProcessedStatsIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // @lat: [[lazy-diff-loading#Metadata-First Diff Stream]]
   const { diffs, error } = useDiffStream(selectedAttempt?.id ?? null, true);
@@ -103,6 +106,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     setHasInitialized(false);
     setLoadedDiffs({});
     setLoadingIds(new Set());
+    setProcessedStatsIds(new Set());
   }, [selectedAttempt?.id]);
 
   useEffect(() => {
@@ -157,6 +161,17 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     });
   }, [diffs, metadataSignatures]);
 
+  useEffect(() => {
+    const validIds = new Set(diffs.map((diff, idx) => getDiffId(diff, idx)));
+    setProcessedStatsIds((prev) => {
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) next.add(id);
+      });
+      return next;
+    });
+  }, [diffs]);
+
   const ids = useMemo(() => {
     return mergedDiffs.map((d, i) => getDiffId(d, i));
   }, [mergedDiffs]);
@@ -179,7 +194,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     async (id: string, diff: Diff) => {
       const attemptId = selectedAttempt?.id;
       const path = diff.newPath || diff.oldPath;
-      if (!attemptId || !path || diff.contentOmitted) return;
+      if (!attemptId || !path) return;
 
       const signature = metadataSignatures.get(id);
       if (!signature) return;
@@ -211,6 +226,11 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       } catch (fetchError) {
         console.error('Failed to load diff file content', path, fetchError);
       } finally {
+        setProcessedStatsIds((prev) => {
+          const next = new Set(prev);
+          next.add(id);
+          return next;
+        });
         setLoadingIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
@@ -245,6 +265,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       loading={loading}
       loadingIds={loadingIds}
       ensureDiffContentLoaded={ensureDiffContentLoaded}
+      processedStatsIds={processedStatsIds}
       t={t}
     />
   );
@@ -263,6 +284,7 @@ interface DiffsPanelContentProps {
   loading: boolean;
   loadingIds: Set<string>;
   ensureDiffContentLoaded: (id: string, diff: Diff) => Promise<void>;
+  processedStatsIds: Set<string>;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
@@ -279,6 +301,7 @@ function DiffsPanelContent({
   loading,
   loadingIds,
   ensureDiffContentLoaded,
+  processedStatsIds,
   t,
 }: DiffsPanelContentProps) {
   const listRootRef = useRef<HTMLDivElement>(null);
@@ -416,6 +439,7 @@ function DiffsPanelContent({
                   }}
                   selectedAttempt={selectedAttempt}
                   loadingContent={loadingIds.has(id)}
+                  statsProcessed={processedStatsIds.has(id)}
                 />
               </ViewportAwareRow>
             );

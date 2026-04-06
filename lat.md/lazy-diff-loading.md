@@ -10,6 +10,8 @@ The metadata stream is produced by [[crates/services/src/services/diff_stream.rs
 Full text for a file is fetched only when needed through a dedicated per-file API endpoint, so backend diff computation stays scoped to the requested path.
 
 The API is implemented in [[crates/server/src/routes/task_attempts.rs#get_task_attempt_diff_file]] and used from [[frontend/src/lib/api.ts#attemptsApi]].
+The frontend now treats this fetch as the point where per-file stats processing is complete, including omitted files such as binaries.
+Diff cards keep stats empty until parsed/fetched values exist, and show a warning icon with hover text for binary/non-text files only after this processing completes.
 
 When path filters are provided, the Git CLI staging step also scopes to those paths so per-file fetches do not stage the full worktree before diffing.
 
