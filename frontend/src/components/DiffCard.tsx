@@ -110,13 +110,13 @@ function DiffCard({
     getHighLightLanguageFromPath(newName || oldName || '') || 'plaintext';
   const { label, Icon } = labelAndIcon(diff);
   const isOmitted = !!diff.contentOmitted;
-  const hasLoadedContent = diff.oldContent !== null || diff.newContent !== null;
+  const hasLoadedContent = diff.oldContent != null || diff.newContent != null;
   const hasDeferredContent =
     !isOmitted && !hasLoadedContent && diff.change !== 'permissionChange';
 
   // Build a diff from raw contents so the viewer can expand beyond hunks
-  const oldContentSafe = diff.oldContent || '';
-  const newContentSafe = diff.newContent || '';
+  const oldContentSafe = diff.oldContent ?? '';
+  const newContentSafe = diff.newContent ?? '';
   const isContentEqual = hasLoadedContent && oldContentSafe === newContentSafe;
 
   const diffOptions = useMemo(

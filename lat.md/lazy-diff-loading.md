@@ -18,3 +18,4 @@ Diff cards request file content when rows enter the viewport and also when users
 
 The viewport-triggered behavior is handled by [[frontend/src/components/panels/DiffsPanel.tsx#ViewportAwareRow]].
 The card renderer is memoized in [[frontend/src/components/DiffCard.tsx#DiffCard]] to avoid re-rendering unchanged cards as neighboring files finish loading.
+Deferred content detection treats both `null` and `undefined` as unloaded content so cards keep showing loading state until full file bodies are fetched.
