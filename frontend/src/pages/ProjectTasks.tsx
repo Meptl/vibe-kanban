@@ -16,10 +16,8 @@ import {
 } from '@/components/ui/select';
 import { attemptsApi, tasksApi } from '@/lib/api';
 import { openTaskForm } from '@/lib/openTaskForm';
-import { FeatureShowcaseDialog } from '@/components/dialogs/global/FeatureShowcaseDialog';
 import { ConfirmDialog } from '@/components/dialogs/shared/ConfirmDialog';
 import { DoneCleanupDialog } from '@/components/dialogs/tasks/DoneCleanupDialog';
-import { showcases } from '@/config/showcases';
 import { useUserSystem } from '@/components/ConfigProvider';
 
 import { useSearch } from '@/contexts/SearchContext';
@@ -263,35 +261,7 @@ export function ProjectTasks() {
   }, [projectId, selectedTask, clearTaskNotifications]);
 
   const isPanelOpen = Boolean(taskId && attemptId);
-
-  const { config, updateAndSaveConfig, loading } = useUserSystem();
-
-  const isLoaded = !loading;
-  const showcaseId = showcases.taskPanel.id;
-  const seenFeatures = useMemo(
-    () => config?.showcases?.seen_features ?? [],
-    [config?.showcases?.seen_features]
-  );
-  const seen = isLoaded && seenFeatures.includes(showcaseId);
-
-  useEffect(() => {
-    if (!isLoaded || !isPanelOpen || seen) return;
-
-    FeatureShowcaseDialog.show({ config: showcases.taskPanel }).finally(() => {
-      FeatureShowcaseDialog.hide();
-      if (seenFeatures.includes(showcaseId)) return;
-      void updateAndSaveConfig({
-        showcases: { seen_features: [...seenFeatures, showcaseId] },
-      });
-    });
-  }, [
-    isLoaded,
-    isPanelOpen,
-    seen,
-    showcaseId,
-    updateAndSaveConfig,
-    seenFeatures,
-  ]);
+  const { config, updateAndSaveConfig } = useUserSystem();
 
   const isLatest = attemptId === 'latest';
   const effectiveAttemptId = attemptId === 'latest' ? undefined : attemptId;
