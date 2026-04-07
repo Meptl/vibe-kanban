@@ -2,6 +2,7 @@ import { Diff } from 'shared/types';
 import { DiffModeEnum, DiffView, SplitSide } from '@git-diff-view/react';
 import { generateDiffFile, type DiffFile } from '@git-diff-view/file';
 import {
+  useCallback,
   memo,
   useEffect,
   useMemo,
@@ -60,6 +61,12 @@ type Props = {
   expanded: boolean;
   onToggle: () => void;
   selectedAttempt: TaskAttempt | null;
+  draftsForFile: Record<string, ReviewDraft>;
+  setDraftForFile: (
+    filePath: string,
+    key: string,
+    draft: ReviewDraft | null
+  ) => void;
   loadingContent?: boolean;
   statsProcessed?: boolean;
 };
@@ -100,12 +107,14 @@ function DiffCard({
   expanded,
   onToggle,
   selectedAttempt,
+  draftsForFile,
+  setDraftForFile,
   loadingContent = false,
   statsProcessed = false,
 }: Props) {
   const { config } = useUserSystem();
   const theme = getActualTheme(config?.theme);
-  const { comments, drafts, setDraft } = useReview();
+  const { comments } = useReview();
   const globalMode = useDiffViewMode();
   const ignoreWhitespace = useIgnoreWhitespaceDiff();
   const wrapText = useWrapTextDiff();
@@ -188,16 +197,22 @@ function DiffCard({
 
   // Review functionality
   const filePath = newName || oldName || 'unknown';
+  const setDraft = useCallback(
+    (key: string, draft: ReviewDraft | null) => {
+      setDraftForFile(filePath, key, draft);
+    },
+    [filePath, setDraftForFile]
+  );
   const commentsForFile = useMemo(
     () => comments.filter((c) => c.filePath === filePath),
     [comments, filePath]
   );
   const draftEntriesForFile = useMemo(
     () =>
-      Object.entries(drafts)
-        .filter(([, draft]) => draft.filePath === filePath)
-        .sort(([, a], [, b]) => a.lineNumber - b.lineNumber),
-    [drafts, filePath]
+      Object.entries(draftsForFile).sort(
+        ([, a], [, b]) => a.lineNumber - b.lineNumber
+      ),
+    [draftsForFile]
   );
   const widgetHookRef = useRef<DiffWidgetHook | null>(null);
 
@@ -240,13 +255,14 @@ function DiffCard({
     onClose: () => void;
   }) => {
     const widgetKey = `${filePath}-${props.side}-${props.lineNumber}`;
-    const draft = drafts[widgetKey];
+    const draft = draftsForFile[widgetKey];
     if (!draft) return null;
 
     return (
       <CommentWidgetLine
         draft={draft}
         widgetKey={widgetKey}
+        setDraft={setDraft}
         onSave={props.onClose}
         onCancel={props.onClose}
         projectId={projectId}
@@ -443,6 +459,8 @@ function areDiffCardsEqual(prev: Props, next: Props): boolean {
   if (prev.loadingContent !== next.loadingContent) return false;
   if (prev.statsProcessed !== next.statsProcessed) return false;
   if (prev.selectedAttempt?.id !== next.selectedAttempt?.id) return false;
+  if (prev.draftsForFile !== next.draftsForFile) return false;
+  if (prev.setDraftForFile !== next.setDraftForFile) return false;
   if (prev.diff === next.diff) return true;
 
   const a = prev.diff;

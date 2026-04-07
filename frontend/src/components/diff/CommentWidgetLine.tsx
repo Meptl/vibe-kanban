@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { PlainTextTagTextarea } from '@/components/ui/plain-text-tag-textarea';
 import { useReview, type ReviewDraft } from '@/contexts/ReviewProvider';
@@ -8,6 +8,7 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 interface CommentWidgetLineProps {
   draft: ReviewDraft;
   widgetKey: string;
+  setDraft: (key: string, draft: ReviewDraft | null) => void;
   onSave: () => void;
   onCancel: () => void;
   projectId?: string;
@@ -16,17 +17,25 @@ interface CommentWidgetLineProps {
 export function CommentWidgetLine({
   draft,
   widgetKey,
+  setDraft,
   onSave,
   onCancel,
   projectId,
 }: CommentWidgetLineProps) {
-  const { setDraft, addComment } = useReview();
+  const { addComment } = useReview();
   const [value, setValue] = useState(draft.text);
+  const latestValueRef = useRef(draft.text);
+  const didCompleteRef = useRef(false);
   const { enableScope, disableScope } = useHotkeysContext();
 
   useEffect(() => {
     setValue(draft.text);
+    latestValueRef.current = draft.text;
   }, [draft.text]);
+
+  useEffect(() => {
+    latestValueRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     enableScope(Scope.EDIT_COMMENT);
@@ -36,11 +45,13 @@ export function CommentWidgetLine({
   }, [enableScope, disableScope]);
 
   const handleCancel = useCallback(() => {
+    didCompleteRef.current = true;
     setDraft(widgetKey, null);
     onCancel();
   }, [setDraft, widgetKey, onCancel]);
 
   const handleSave = useCallback(() => {
+    didCompleteRef.current = true;
     if (value.trim()) {
       addComment({
         filePath: draft.filePath,
@@ -81,10 +92,16 @@ export function CommentWidgetLine({
   const handleChange = useCallback(
     (nextValue: string) => {
       setValue(nextValue);
-      setDraft(widgetKey, { ...draft, text: nextValue });
     },
-    [draft, setDraft, widgetKey]
+    []
   );
+
+  useEffect(() => {
+    return () => {
+      if (didCompleteRef.current) return;
+      setDraft(widgetKey, { ...draft, text: latestValueRef.current });
+    };
+  }, [draft, setDraft, widgetKey]);
 
   return (
     <div className="p-4 border-y bg-primary">

@@ -28,6 +28,9 @@ Diff cards short-circuit memo comparison when the diff object reference is uncha
 Collapsed diff cards skip `generateDiffFile` parsing entirely and parse only after expansion, so loading metadata for many files does not precompute hidden diff views.
 Collapsed card headers still show per-file `+/-` totals from streamed/fetched diff metadata, so stats stay visible even when line-level parsing is deferred.
 Files with more than 400 changed lines (`additions + deletions`) are treated as large-card exceptions: while collapsed, viewport visibility does not auto-fetch their full content.
+Inline review comment editors keep typing state locally in [[frontend/src/components/diff/CommentWidgetLine.tsx#CommentWidgetLine]] and only sync draft text back to global review state on teardown, avoiding whole-diff context fanout on each keypress.
+Diff-local drafts are keyed by file inside [[frontend/src/components/panels/DiffsPanel.tsx#DiffsPanel]] and passed down as per-file slices to [[frontend/src/components/DiffCard.tsx#DiffCard]], so draft mutations only invalidate the affected file card.
+Draft persistence is debounced in [[frontend/src/components/panels/DiffsPanel.tsx#DiffsPanel]] and merged with the latest follow-up message/variant from storage before writeback, while [[frontend/src/contexts/ReviewProvider.tsx#ReviewProvider]] now persists finalized review comments.
 
 ## Metadata-Only Header Health Signals
 Diff header warnings now rely on streamed metadata flags instead of reparsing every file body, which prevents render-time main-thread spikes on large attempts.

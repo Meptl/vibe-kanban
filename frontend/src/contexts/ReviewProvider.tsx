@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
 } from 'react';
 import type { DraftReviewCommentData } from 'shared/types';
 import { draftApi } from '@/lib/api';
@@ -31,12 +32,10 @@ export interface ReviewDraft {
 
 interface ReviewContextType {
   comments: ReviewComment[];
-  drafts: Record<string, ReviewDraft>;
   addComment: (comment: Omit<ReviewComment, 'id'>) => void;
   updateComment: (id: string, text: string) => void;
   deleteComment: (id: string) => void;
   clearComments: () => void;
-  setDraft: (key: string, draft: ReviewDraft | null) => void;
   generateReviewMarkdown: () => string;
 }
 
@@ -48,10 +47,6 @@ function deserializeSplitSide(side: string): SplitSide {
 
 function serializeSplitSide(side: SplitSide): string {
   return side === SplitSide.old ? 'old' : 'new';
-}
-
-function makeDraftKey(filePath: string, side: SplitSide, lineNumber: number) {
-  return `${filePath}-${side}-${lineNumber}`;
 }
 
 export function useReview() {
@@ -70,17 +65,11 @@ export function ReviewProvider({
   attemptId?: string;
 }) {
   const [comments, setComments] = useState<ReviewComment[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
   const loadedAttemptIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setDrafts({});
-  }, [attemptId]);
 
   useEffect(() => {
     if (!attemptId) {
       setComments([]);
-      setDrafts({});
       loadedAttemptIdRef.current = null;
       return;
     }
@@ -99,31 +88,13 @@ export function ReviewProvider({
             text: comment.text,
             ...(comment.code_line ? { codeLine: comment.code_line } : {}),
           })) ?? [];
-        const nextDrafts = Object.fromEntries(
-          (draft?.review_comment_drafts ?? []).map((comment) => {
-            const side = deserializeSplitSide(comment.side);
-            const key = makeDraftKey(comment.file_path, side, comment.line_number);
-            return [
-              key,
-              {
-                filePath: comment.file_path,
-                lineNumber: comment.line_number,
-                side,
-                text: comment.text,
-                ...(comment.code_line ? { codeLine: comment.code_line } : {}),
-              } satisfies ReviewDraft,
-            ];
-          })
-        );
         setComments(nextComments);
-        setDrafts(nextDrafts);
         loadedAttemptIdRef.current = attemptId;
       })
       .catch((error) => {
         console.error('Failed to load review drafts', error);
         if (!mounted) return;
         setComments([]);
-        setDrafts({});
         loadedAttemptIdRef.current = attemptId;
       });
 
@@ -136,72 +107,58 @@ export function ReviewProvider({
     if (!attemptId) return;
     if (loadedAttemptIdRef.current !== attemptId) return;
 
-    const savePromise = draftApi
-      .get(attemptId)
-      .then((existing) =>
-        draftApi.save(attemptId, {
-          message: existing?.message ?? '',
-          variant: existing?.variant ?? null,
-          review_comments: comments.map(
-            (comment): DraftReviewCommentData => ({
-              file_path: comment.filePath,
-              line_number: comment.lineNumber,
-              side: serializeSplitSide(comment.side),
-              text: comment.text,
-              code_line: comment.codeLine ?? null,
-            })
-          ),
-          review_comment_drafts: Object.values(drafts).map(
-            (draft): DraftReviewCommentData => ({
-              file_path: draft.filePath,
-              line_number: draft.lineNumber,
-              side: serializeSplitSide(draft.side),
-              text: draft.text,
-              code_line: draft.codeLine ?? null,
-            })
-          ),
-        })
-      );
-    void savePromise.catch((error) => {
-        console.error('Failed to persist review comments and drafts', error);
-      });
-  }, [attemptId, comments, drafts]);
+    const saveTimeout = window.setTimeout(() => {
+      void draftApi
+        .get(attemptId)
+        .then((existing) =>
+          draftApi.save(attemptId, {
+            message: existing?.message ?? '',
+            variant: existing?.variant ?? null,
+            review_comments: comments.map(
+              (comment): DraftReviewCommentData => ({
+                file_path: comment.filePath,
+                line_number: comment.lineNumber,
+                side: serializeSplitSide(comment.side),
+                text: comment.text,
+                code_line: comment.codeLine ?? null,
+              })
+            ),
+            review_comment_drafts: existing?.review_comment_drafts ?? [],
+          })
+        )
+        .catch((error) => {
+          console.error('Failed to persist review comments and drafts', error);
+        });
+    }, 400);
 
-  const addComment = (comment: Omit<ReviewComment, 'id'>) => {
+    return () => {
+      window.clearTimeout(saveTimeout);
+    };
+  }, [attemptId, comments]);
+
+  const addComment = useCallback((comment: Omit<ReviewComment, 'id'>) => {
     const newComment: ReviewComment = {
       ...comment,
       id: genId(),
     };
     setComments((prev) => [...prev, newComment]);
-  };
+  }, []);
 
-  const updateComment = (id: string, text: string) => {
+  const updateComment = useCallback((id: string, text: string) => {
     setComments((prev) =>
       prev.map((comment) =>
         comment.id === id ? { ...comment, text } : comment
       )
     );
-  };
+  }, []);
 
-  const deleteComment = (id: string) => {
+  const deleteComment = useCallback((id: string) => {
     setComments((prev) => prev.filter((comment) => comment.id !== id));
-  };
+  }, []);
 
-  const clearComments = () => {
+  const clearComments = useCallback(() => {
     setComments([]);
-    setDrafts({});
-  };
-
-  const setDraft = (key: string, draft: ReviewDraft | null) => {
-    setDrafts((prev) => {
-      if (draft === null) {
-        const newDrafts = { ...prev };
-        delete newDrafts[key];
-        return newDrafts;
-      }
-      return { ...prev, [key]: draft };
-    });
-  };
+  }, []);
 
   const generateReviewMarkdown = useCallback(() => {
     if (comments.length === 0) return '';
@@ -234,20 +191,24 @@ export function ReviewProvider({
     return header + commentsMd;
   }, [comments]);
 
-  return (
-    <ReviewContext.Provider
-      value={{
-        comments,
-        drafts,
-        addComment,
-        updateComment,
-        deleteComment,
-        clearComments,
-        setDraft,
-        generateReviewMarkdown,
-      }}
-    >
-      {children}
-    </ReviewContext.Provider>
+  const value = useMemo(
+    () => ({
+      comments,
+      addComment,
+      updateComment,
+      deleteComment,
+      clearComments,
+      generateReviewMarkdown,
+    }),
+    [
+      comments,
+      addComment,
+      updateComment,
+      deleteComment,
+      clearComments,
+      generateReviewMarkdown,
+    ]
   );
+
+  return <ReviewContext.Provider value={value}>{children}</ReviewContext.Provider>;
 }

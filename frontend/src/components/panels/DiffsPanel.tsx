@@ -22,7 +22,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { TaskAttempt, Diff } from 'shared/types';
-import { attemptsApi } from '@/lib/api';
+import type { DraftReviewCommentData } from 'shared/types';
+import { attemptsApi, draftApi } from '@/lib/api';
+import { SplitSide } from '@git-diff-view/react';
+import { useReview, type ReviewDraft } from '@/contexts/ReviewProvider';
 
 interface DiffsPanelProps {
   selectedAttempt: TaskAttempt | null;
@@ -41,6 +44,19 @@ const DEFAULT_COLLAPSED_CHANGES = new Set([
   'copied',
   'permissionChange',
 ]);
+const EMPTY_DRAFTS_FOR_FILE: Readonly<Record<string, ReviewDraft>> = {};
+
+function serializeSplitSide(side: SplitSide): string {
+  return side === SplitSide.old ? 'old' : 'new';
+}
+
+function deserializeSplitSide(side: string): SplitSide {
+  return side === 'old' ? SplitSide.old : SplitSide.new;
+}
+
+function getDiffFilePath(diff: Diff): string {
+  return diff.newPath || diff.oldPath || 'unknown';
+}
 
 function isLargeDiffFile(diff: Diff): boolean {
   const additions = diff.additions ?? 0;
@@ -65,6 +81,7 @@ function getDiffSignature(diff: Diff): string {
 
 export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   const { t } = useTranslation('tasks');
+  const { comments } = useReview();
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [hasInitialized, setHasInitialized] = useState(false);
   const [hasUserAdjustedCollapse, setHasUserAdjustedCollapse] = useState(false);
@@ -75,6 +92,10 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   const [processedStatsIds, setProcessedStatsIds] = useState<Set<string>>(
     new Set()
   );
+  const [draftsByFile, setDraftsByFile] = useState<
+    Record<string, Record<string, ReviewDraft>>
+  >({});
+  const loadedDraftAttemptIdRef = useRef<string | null>(null);
 
   // @lat: [[lazy-diff-loading#Metadata-First Diff Stream]]
   const { diffs, isComplete, error } = useDiffStream(
@@ -124,7 +145,135 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     setLoadedDiffs({});
     setLoadingIds(new Set());
     setProcessedStatsIds(new Set());
+    setDraftsByFile({});
+    loadedDraftAttemptIdRef.current = null;
   }, [selectedAttempt?.id]);
+
+  useEffect(() => {
+    const attemptId = selectedAttempt?.id;
+    if (!attemptId) {
+      setDraftsByFile({});
+      loadedDraftAttemptIdRef.current = null;
+      return;
+    }
+
+    let mounted = true;
+    draftApi
+      .get(attemptId)
+      .then((draft) => {
+        if (!mounted) return;
+        const nextDraftsByFile: Record<string, Record<string, ReviewDraft>> = {};
+        for (const comment of draft?.review_comment_drafts ?? []) {
+          const side = deserializeSplitSide(comment.side);
+          const filePath = comment.file_path;
+          const key = `${filePath}-${side}-${comment.line_number}`;
+          const nextDraft: ReviewDraft = {
+            filePath,
+            side,
+            lineNumber: comment.line_number,
+            text: comment.text,
+            ...(comment.code_line ? { codeLine: comment.code_line } : {}),
+          };
+          if (!nextDraftsByFile[filePath]) {
+            nextDraftsByFile[filePath] = {};
+          }
+          nextDraftsByFile[filePath][key] = nextDraft;
+        }
+        setDraftsByFile(nextDraftsByFile);
+        loadedDraftAttemptIdRef.current = attemptId;
+      })
+      .catch((error) => {
+        console.error('Failed to load review comment drafts', error);
+        if (!mounted) return;
+        setDraftsByFile({});
+        loadedDraftAttemptIdRef.current = attemptId;
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedAttempt?.id]);
+
+  const setDraftForFile = useCallback(
+    (filePath: string, key: string, draft: ReviewDraft | null) => {
+      setDraftsByFile((prev) => {
+        const prevFileDrafts = prev[filePath] ?? EMPTY_DRAFTS_FOR_FILE;
+        if (draft === null) {
+          if (!(key in prevFileDrafts)) return prev;
+          const nextFileDrafts = { ...prevFileDrafts };
+          delete nextFileDrafts[key];
+          if (Object.keys(nextFileDrafts).length === 0) {
+            const next = { ...prev };
+            delete next[filePath];
+            return next;
+          }
+          return { ...prev, [filePath]: nextFileDrafts };
+        }
+
+        const previous = prevFileDrafts[key];
+        if (
+          previous &&
+          previous.text === draft.text &&
+          previous.codeLine === draft.codeLine
+        ) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [filePath]: {
+            ...prevFileDrafts,
+            [key]: draft,
+          },
+        };
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    const attemptId = selectedAttempt?.id;
+    if (!attemptId) return;
+    if (loadedDraftAttemptIdRef.current !== attemptId) return;
+
+    const saveTimeout = window.setTimeout(() => {
+      const reviewCommentDrafts: DraftReviewCommentData[] = Object.values(
+        draftsByFile
+      )
+        .flatMap((fileDrafts) => Object.values(fileDrafts))
+        .map((draft) => ({
+          file_path: draft.filePath,
+          line_number: draft.lineNumber,
+          side: serializeSplitSide(draft.side),
+          text: draft.text,
+          code_line: draft.codeLine ?? null,
+        }));
+
+      void draftApi
+        .get(attemptId)
+        .then((existing) =>
+          draftApi.save(attemptId, {
+            message: existing?.message ?? '',
+            variant: existing?.variant ?? null,
+            review_comments: comments.map((comment) => ({
+              file_path: comment.filePath,
+              line_number: comment.lineNumber,
+              side: serializeSplitSide(comment.side),
+              text: comment.text,
+              code_line: comment.codeLine ?? null,
+            })),
+            review_comment_drafts: reviewCommentDrafts,
+          })
+        )
+        .catch((error) => {
+          console.error('Failed to persist review comment drafts', error);
+        });
+    }, 400);
+
+    return () => {
+      window.clearTimeout(saveTimeout);
+    };
+  }, [selectedAttempt?.id, comments, draftsByFile]);
 
   useEffect(() => {
     if (!isComplete || diffs.length === 0 || hasInitialized || hasUserAdjustedCollapse)
@@ -284,6 +433,8 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       ensureDiffContentLoaded={ensureDiffContentLoaded}
       processedStatsIds={processedStatsIds}
       largeDiffIds={largeDiffIds}
+      draftsByFile={draftsByFile}
+      setDraftForFile={setDraftForFile}
       t={t}
     />
   );
@@ -304,6 +455,12 @@ interface DiffsPanelContentProps {
   ensureDiffContentLoaded: (id: string, diff: Diff) => Promise<void>;
   processedStatsIds: Set<string>;
   largeDiffIds: Set<string>;
+  draftsByFile: Record<string, Record<string, ReviewDraft>>;
+  setDraftForFile: (
+    filePath: string,
+    key: string,
+    draft: ReviewDraft | null
+  ) => void;
   t: (key: string, params?: Record<string, unknown>) => string;
 }
 
@@ -322,6 +479,8 @@ function DiffsPanelContent({
   ensureDiffContentLoaded,
   processedStatsIds,
   largeDiffIds,
+  draftsByFile,
+  setDraftForFile,
   t,
 }: DiffsPanelContentProps) {
   const listRootRef = useRef<HTMLDivElement>(null);
@@ -416,6 +575,7 @@ function DiffsPanelContent({
           diffs.map((diff, idx) => {
             const id = getDiffId(diff, idx);
             const isExpanded = !collapsedIds.has(id);
+            const filePath = getDiffFilePath(diff);
             return (
               <ViewportAwareRow
                 key={id}
@@ -437,6 +597,8 @@ function DiffsPanelContent({
                     }
                   }}
                   selectedAttempt={selectedAttempt}
+                  draftsForFile={draftsByFile[filePath] ?? EMPTY_DRAFTS_FOR_FILE}
+                  setDraftForFile={setDraftForFile}
                   loadingContent={loadingIds.has(id)}
                   statsProcessed={processedStatsIds.has(id)}
                 />
