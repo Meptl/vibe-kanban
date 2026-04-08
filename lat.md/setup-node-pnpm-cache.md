@@ -2,7 +2,7 @@
 <<<<<<< HEAD
 # Setup Node Pnpm Cache Order
 =======
-# Setup Node Pnpm Cache Ordering
+# Setup Node Pnpm Cache Orderingghehe
 >>>>>>> vk/cca1-settings-storage
 
 This section documents CI setup ordering that prevents pnpm cache checks from running before pnpm is installed.
