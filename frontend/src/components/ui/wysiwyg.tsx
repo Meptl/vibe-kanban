@@ -255,7 +255,7 @@ function WYSIWYGEditor({
                 onClick={onEdit}
                 className="pointer-events-auto p-2 bg-muted h-8 w-8"
               >
-                <Pencil className="w-4 h-4 text-muted-foreground" />
+                <Pencil className="w-4 h-4 text-muted-foreground dark:text-white" />
               </Button>
             )}
             {/* Delete button - only if onDelete provided */}
@@ -269,7 +269,7 @@ function WYSIWYGEditor({
                 onClick={onDelete}
                 className="pointer-events-auto p-2 bg-muted h-8 w-8"
               >
-                <Trash2 className="w-4 h-4 text-muted-foreground" />
+                <Trash2 className="w-4 h-4 text-muted-foreground dark:text-white" />
               </Button>
             )}
           </div>
