@@ -92,6 +92,9 @@ impl IntoResponse for ApiError {
                 services::services::git::GitServiceError::RebaseInProgress => {
                     (StatusCode::CONFLICT, "GitServiceError")
                 }
+                services::services::git::GitServiceError::WorktreeDirty(_, _) => {
+                    (StatusCode::CONFLICT, "GitServiceError")
+                }
                 _ => (StatusCode::INTERNAL_SERVER_ERROR, "GitServiceError"),
             },
             ApiError::Deployment(_) => (StatusCode::INTERNAL_SERVER_ERROR, "DeploymentError"),
@@ -137,6 +140,11 @@ impl IntoResponse for ApiError {
                 services::services::git::GitServiceError::MergeConflicts(msg) => msg.clone(),
                 services::services::git::GitServiceError::RebaseInProgress => {
                     "A rebase is already in progress. Resolve conflicts or abort the rebase, then retry.".to_string()
+                }
+                services::services::git::GitServiceError::WorktreeDirty(branch, files) => {
+                    format!(
+                        "Uncommitted changes detected on '{branch}' ({files}). Commit or stash changes before merging."
+                    )
                 }
                 _ => format!("{}: {}", error_type, self),
             },
