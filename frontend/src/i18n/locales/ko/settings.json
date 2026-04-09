@@ -221,15 +221,10 @@
       },
       "safety": {
         "title": "안전 및 면책 조항",
-        "description": "안전 경고 및 온보딩에 대한 확인을 재설정하세요.",
+        "description": "안전 경고 확인을 재설정하세요.",
         "disclaimer": {
           "title": "면책 조항 확인",
           "description": "안전 면책 조항을 재설정합니다.",
-          "button": "초기화"
-        },
-        "onboarding": {
-          "title": "온보딩",
-          "description": "온보딩 흐름을 재설정합니다.",
           "button": "초기화"
         }
       }

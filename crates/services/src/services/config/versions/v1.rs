@@ -5,7 +5,6 @@ pub(super) struct Config {
     pub(super) theme: ThemeMode,
     pub(super) executor: ExecutorConfig,
     pub(super) disclaimer_acknowledged: bool,
-    pub(super) onboarding_acknowledged: bool,
     pub(super) github_login_acknowledged: bool,
     pub(super) telemetry_acknowledged: bool,
     pub(super) sound_alerts: bool,

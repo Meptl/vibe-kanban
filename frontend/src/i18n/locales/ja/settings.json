@@ -221,15 +221,10 @@
       },
       "safety": {
         "title": "安全性と免責事項",
-        "description": "安全警告とオンボーディングの承認をリセットします。",
+        "description": "安全警告の承認をリセットします。",
         "disclaimer": {
           "title": "免責事項の承認",
           "description": "安全免責事項をリセットします。",
-          "button": "リセット"
-        },
-        "onboarding": {
-          "title": "オンボーディング",
-          "description": "オンボーディングフローをリセットします。",
           "button": "リセット"
         }
       }

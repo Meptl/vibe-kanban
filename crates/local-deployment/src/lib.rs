@@ -117,17 +117,19 @@ pub struct LocalDeployment {
 #[async_trait]
 impl Deployment for LocalDeployment {
     async fn new() -> Result<Self, DeploymentError> {
-        let mut raw_config = load_config_from_file(&config_path()).await;
+        let config_path = config_path();
+        let config_exists = config_path.exists();
+        let mut raw_config = load_config_from_file(&config_path).await;
 
         let profiles = ExecutorConfigs::get_cached();
-        if !raw_config.onboarding_acknowledged
+        if !config_exists
             && let Ok(recommended_executor) = profiles.get_recommended_executor_profile().await
         {
             raw_config.executor_profile = recommended_executor;
         }
 
         // Always save config (may have been migrated)
-        save_config_to_file(&raw_config, &config_path()).await?;
+        save_config_to_file(&raw_config, &config_path).await?;
 
         let config = Arc::new(RwLock::new(raw_config));
         let user_id = Uuid::new_v4().to_string();

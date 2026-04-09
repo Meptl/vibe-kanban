@@ -8,6 +8,12 @@ Global user preferences are stored in `asset_dir()/config.json` and executor pro
 
 The backend resolves `asset_dir()` to `dev_assets` in debug builds and to the platform app-data directory in production. This keeps user config portable across launches without coupling it to any single project row.
 
+## Startup Executor Seeding
+
+Recommended executor selection is only applied when `config.json` does not exist, so startup does not overwrite a previously saved default executor profile.
+
+`[[crates/local-deployment/src/lib.rs#Deployment#new]]` checks whether the config file already exists before applying first-run recommendation logic, then writes the resulting config back to disk.
+
 ## API Boundary For Config Files
 
 The frontend reads and writes config through backend routes instead of direct file access so validation, migrations, and runtime cache updates happen in one place.

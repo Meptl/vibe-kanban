@@ -62,7 +62,6 @@ pub struct Config {
     pub theme: ThemeMode,
     pub executor_profile: ExecutorProfileId,
     pub disclaimer_acknowledged: bool,
-    pub onboarding_acknowledged: bool,
     pub notifications: NotificationConfig,
     pub editor: EditorConfig,
     pub workspace_dir: Option<String>,
@@ -91,7 +90,6 @@ impl Config {
             theme: old_config.theme,
             executor_profile: old_config.executor_profile,
             disclaimer_acknowledged: old_config.disclaimer_acknowledged,
-            onboarding_acknowledged: old_config.onboarding_acknowledged,
             notifications: NotificationConfig {
                 sound_enabled: old_config.notifications.sound_enabled,
                 system_enabled: old_config.notifications.push_enabled,
@@ -146,7 +144,6 @@ impl Default for Config {
             theme: ThemeMode::System,
             executor_profile: ExecutorProfileId::new(BaseCodingAgent::ClaudeCode),
             disclaimer_acknowledged: false,
-            onboarding_acknowledged: false,
             notifications: NotificationConfig::default(),
             editor: EditorConfig::default(),
             workspace_dir: None,

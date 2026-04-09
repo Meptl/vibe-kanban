@@ -41,7 +41,6 @@ pub struct Config {
     pub theme: ThemeMode,
     pub profile: String,
     pub disclaimer_acknowledged: bool,
-    pub onboarding_acknowledged: bool,
     pub github_login_acknowledged: bool,
     pub telemetry_acknowledged: bool,
     pub notifications: NotificationConfig,
@@ -64,8 +63,6 @@ impl Config {
 
         let old_config_clone = old_config.clone();
 
-        let mut onboarding_acknowledged = old_config.onboarding_acknowledged;
-
         // Map old executors to new profiles
         let profile: &str = match old_config.executor {
             v1::ExecutorConfig::Claude => "claude-code",
@@ -74,10 +71,7 @@ impl Config {
             v1::ExecutorConfig::Amp => "amp",
             v1::ExecutorConfig::Gemini => "gemini",
             v1::ExecutorConfig::SstOpencode => "opencode",
-            _ => {
-                onboarding_acknowledged = false; // Reset the user's onboarding if executor is not supported
-                "claude-code"
-            }
+            _ => "claude-code",
         };
 
         Ok(Self {
@@ -85,7 +79,6 @@ impl Config {
             theme: ThemeMode::from(old_config.theme), // Now SCREAMING_SNAKE_CASE
             profile: profile.to_string(),
             disclaimer_acknowledged: old_config.disclaimer_acknowledged,
-            onboarding_acknowledged,
             github_login_acknowledged: old_config.github_login_acknowledged,
             telemetry_acknowledged: old_config.telemetry_acknowledged,
             notifications: NotificationConfig::from(old_config_clone),
@@ -118,7 +111,6 @@ impl Default for Config {
             theme: ThemeMode::System,
             profile: String::from("claude-code"),
             disclaimer_acknowledged: false,
-            onboarding_acknowledged: false,
             github_login_acknowledged: false,
             telemetry_acknowledged: false,
             notifications: NotificationConfig::default(),

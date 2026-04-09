@@ -217,15 +217,10 @@
       },
       "safety": {
         "title": "Safety & Disclaimers",
-        "description": "Reset acknowledgments for safety warnings and onboarding.",
+        "description": "Reset acknowledgments for safety warnings.",
         "disclaimer": {
           "title": "Disclaimer Acknowledgment",
           "description": "Reset the safety disclaimer.",
-          "button": "Reset"
-        },
-        "onboarding": {
-          "title": "Onboarding",
-          "description": "Reset the onboarding flow.",
           "button": "Reset"
         }
       }

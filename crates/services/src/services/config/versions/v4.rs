@@ -33,7 +33,6 @@ pub struct Config {
     pub theme: ThemeMode,
     pub profile: ProfileVariantLabel,
     pub disclaimer_acknowledged: bool,
-    pub onboarding_acknowledged: bool,
     pub github_login_acknowledged: bool,
     pub telemetry_acknowledged: bool,
     pub notifications: NotificationConfig,
@@ -53,7 +52,6 @@ impl Config {
                 return Err(e.into());
             }
         };
-        let mut onboarding_acknowledged = old_config.onboarding_acknowledged;
         let profile = match old_config.profile.as_str() {
             "claude-code" => ProfileVariantLabel::default("claude-code".to_string()),
             "claude-code-plan" => {
@@ -67,10 +65,7 @@ impl Config {
             "codex" => ProfileVariantLabel::default("codex".to_string()),
             "opencode" => ProfileVariantLabel::default("opencode".to_string()),
             "qwen-code" => ProfileVariantLabel::default("qwen-code".to_string()),
-            _ => {
-                onboarding_acknowledged = false; // Reset the user's onboarding if executor is not supported
-                ProfileVariantLabel::default("claude-code".to_string())
-            }
+            _ => ProfileVariantLabel::default("claude-code".to_string()),
         };
 
         Ok(Self {
@@ -78,7 +73,6 @@ impl Config {
             theme: old_config.theme,
             profile,
             disclaimer_acknowledged: old_config.disclaimer_acknowledged,
-            onboarding_acknowledged,
             github_login_acknowledged: old_config.github_login_acknowledged,
             telemetry_acknowledged: old_config.telemetry_acknowledged,
             notifications: old_config.notifications,
@@ -118,7 +112,6 @@ impl Default for Config {
             theme: ThemeMode::System,
             profile: ProfileVariantLabel::default("claude-code".to_string()),
             disclaimer_acknowledged: false,
-            onboarding_acknowledged: false,
             github_login_acknowledged: false,
             telemetry_acknowledged: false,
             notifications: NotificationConfig::default(),

@@ -221,15 +221,10 @@
       },
       "safety": {
         "title": "安全和免责声明",
-        "description": "重置安全警告和入门流程的确认。",
+        "description": "重置安全警告的确认。",
         "disclaimer": {
           "title": "免责声明确认",
           "description": "重置安全免责声明。",
-          "button": "重置"
-        },
-        "onboarding": {
-          "title": "入门流程",
-          "description": "重置入门流程。",
           "button": "重置"
         }
       }

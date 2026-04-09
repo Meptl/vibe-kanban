@@ -221,15 +221,10 @@
       },
       "safety": {
         "title": "Avisos legales y de seguridad",
-        "description": "Reinicia las confirmaciones de seguridad y de introducción.",
+        "description": "Reinicia las confirmaciones de seguridad.",
         "disclaimer": {
           "title": "Confirmación de Descargo",
           "description": "Restablecer el aviso de seguridad.",
-          "button": "Restablecer"
-        },
-        "onboarding": {
-          "title": "Introducción",
-          "description": "Restablece el flujo de Introducción.",
           "button": "Restablecer"
         }
       }
