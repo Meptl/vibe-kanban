@@ -44,6 +44,10 @@ function spawnBackend() {
     HOST: process.env.HOST || '127.0.0.1',
     DISABLE_BROWSER_OPEN: '1',
   };
+  // Packaging runtimes can inject argv overrides that break rustup proxy
+  // commands (cargo/rustc) in backend-spawned shells.
+  delete env.RUSTUP_FORCE_ARG0;
+  delete env.ARGV0;
 
   backendProcess = spawn(backendPath, [], {
     env,
