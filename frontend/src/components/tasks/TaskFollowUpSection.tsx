@@ -6,6 +6,7 @@ import {
   Clock,
   X,
   ImageIcon,
+  Terminal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -17,7 +18,11 @@ import {
 } from '@/components/ui/tooltip';
 //
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { type TaskWithAttemptStatus } from 'shared/types';
+import {
+  type DraftFollowUpData,
+  type ExecutorProfileId,
+  type TaskWithAttemptStatus,
+} from 'shared/types';
 import { useBranchStatus } from '@/hooks';
 import { useAttemptExecution } from '@/hooks/useAttemptExecution';
 import { useUserSystem } from '@/components/ConfigProvider';
@@ -38,14 +43,14 @@ import { PlainTextTagTextarea } from '@/components/ui/plain-text-tag-textarea';
 import { useRetryUi } from '@/contexts/RetryUiContext';
 import { useFollowUpSend } from '@/hooks/useFollowUpSend';
 import { useVariant } from '@/hooks/useVariant';
-import type { DraftFollowUpData, ExecutorProfileId } from 'shared/types';
 import { buildResolveConflictsInstructions } from '@/lib/conflicts';
 import { useTranslation } from 'react-i18next';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { useQueueStatus } from '@/hooks/useQueueStatus';
-import { imagesApi } from '@/lib/api';
+import { attemptsApi, imagesApi } from '@/lib/api';
 import { extractProfileFromAction } from '@/utils/executor';
 import { useFollowUpDraftStorage } from '@/hooks/useFollowUpDraftStorage';
+import { useMutation } from '@tanstack/react-query';
 
 interface TaskFollowUpSectionProps {
   task: TaskWithAttemptStatus;
@@ -57,7 +62,7 @@ export function TaskFollowUpSection({
   selectedAttemptId,
 }: TaskFollowUpSectionProps) {
   const { t } = useTranslation('tasks');
-  const { projectId } = useProject();
+  const { projectId, project } = useProject();
 
   const { isAttemptRunning, stopExecution, isStopping, processes } =
     useAttemptExecution(selectedAttemptId, task.id);
@@ -286,6 +291,29 @@ export function TaskFollowUpSection({
         setLocalMessage(''); // Clear local state immediately
       },
     });
+
+  const { mutateAsync: runSetup, isPending: isRunningSetup } = useMutation({
+    mutationFn: async () => {
+      if (!selectedAttemptId) return;
+      await attemptsApi.runSetupScript(selectedAttemptId);
+    },
+    onMutate: () => {
+      setFollowUpError(null);
+    },
+    onError: (error: unknown) => {
+      const err = error as { message?: string };
+      setFollowUpError(
+        `Failed to run setup: ${err.message ?? 'Unknown error'}`
+      );
+    },
+  });
+
+  const onRunSetup = useCallback(async () => {
+    if (!selectedAttemptId) return;
+    await runSetup();
+  }, [selectedAttemptId, runSetup]);
+
+  const hasSetupScript = !!project?.setup_script?.trim();
 
   // Separate logic for when textarea should be disabled vs when send button should be disabled
   const canTypeFollowUp = useMemo(() => {
@@ -735,22 +763,40 @@ export function TaskFollowUpSection({
                 </Button>
               </div>
             ) : (
-              <Button
-                onClick={onSendFollowUp}
-                disabled={!canSendFollowUp || !isEditable}
-                size="sm"
-              >
-                {isSendingFollowUp ? (
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    {conflictResolutionInstructions
-                      ? t('followUp.resolveConflicts')
-                      : t('followUp.send')}
-                  </>
-                )}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={onRunSetup}
+                  disabled={!hasSetupScript || !isEditable || isRunningSetup}
+                  size="sm"
+                  variant="outline"
+                  title="Run setup script"
+                  aria-label="Run setup script"
+                  className="px-2"
+                >
+                  {isRunningSetup ? (
+                    <Loader2 className="animate-spin h-4 w-4" />
+                  ) : (
+                    <Terminal className="h-4 w-4" />
+                  )}
+                </Button>
+
+                <Button
+                  onClick={onSendFollowUp}
+                  disabled={!canSendFollowUp || !isEditable}
+                  size="sm"
+                >
+                  {isSendingFollowUp ? (
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      {conflictResolutionInstructions
+                        ? t('followUp.resolveConflicts')
+                        : t('followUp.send')}
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         </div>

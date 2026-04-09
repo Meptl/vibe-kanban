@@ -42,8 +42,6 @@ import {
   CheckEditorAvailabilityResponse,
   AvailabilityInfo,
   BaseCodingAgent,
-  RunAgentSetupRequest,
-  RunAgentSetupResponse,
   CommitCompareResult,
   OpenEditorResponse,
   OpenEditorRequest,
@@ -373,18 +371,14 @@ export const attemptsApi = {
     return handleApiResponse<void>(response);
   },
 
-  runAgentSetup: async (
-    attemptId: string,
-    data: RunAgentSetupRequest
-  ): Promise<RunAgentSetupResponse> => {
+  runSetupScript: async (attemptId: string): Promise<void> => {
     const response = await makeRequest(
-      `/api/task-attempts/${attemptId}/run-agent-setup`,
+      `/api/task-attempts/${attemptId}/run-setup-script`,
       {
         method: 'POST',
-        body: JSON.stringify(data),
       }
     );
-    return handleApiResponse<RunAgentSetupResponse>(response);
+    return handleApiResponse<void>(response);
   },
 
   openEditor: async (

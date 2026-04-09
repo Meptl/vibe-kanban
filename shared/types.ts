@@ -134,10 +134,6 @@ export type CreateTaskAttemptBody = { task_id: string,
  */
 executor_profile_id: ExecutorProfileId, base_branch: string, };
 
-export type RunAgentSetupRequest = { executor_profile_id: ExecutorProfileId, };
-
-export type RunAgentSetupResponse = Record<string, never>;
-
 export type RebaseTaskAttemptRequest = { old_base_branch: string | null, new_base_branch: string | null, };
 
 export type GitOperationError = { "type": "merge_conflicts", message: string, op: ConflictOp, } | { "type": "rebase_in_progress" };

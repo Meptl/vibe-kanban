@@ -1,5 +1,3 @@
-pub mod codex_setup;
-pub mod cursor_setup;
 pub mod drafts;
 pub mod images;
 pub mod queue;
@@ -31,8 +29,7 @@ use executors::{
         coding_agent_follow_up::CodingAgentFollowUpRequest,
         script::{ScriptContext, ScriptRequest, ScriptRequestLanguage},
     },
-    executors::{CodingAgent, ExecutorError},
-    profile::{ExecutorConfigs, ExecutorProfileId},
+    profile::ExecutorProfileId,
 };
 use git2::BranchType;
 use local_deployment::Deployment;
@@ -333,14 +330,6 @@ impl CreateTaskAttemptBody {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, TS)]
-pub struct RunAgentSetupRequest {
-    pub executor_profile_id: ExecutorProfileId,
-}
-
-#[derive(Debug, Serialize, TS)]
-pub struct RunAgentSetupResponse {}
-
 #[axum::debug_handler]
 pub async fn create_task_attempt(
     State(deployment): State<DeploymentImpl>,
@@ -417,28 +406,6 @@ pub async fn create_task_attempt(
     tracing::info!("Created attempt for task {}", task.id);
 
     Ok(ResponseJson(ApiResponse::success(task_attempt)))
-}
-
-#[axum::debug_handler]
-pub async fn run_agent_setup(
-    Extension(task_attempt): Extension<TaskAttempt>,
-    State(deployment): State<DeploymentImpl>,
-    Json(payload): Json<RunAgentSetupRequest>,
-) -> Result<ResponseJson<ApiResponse<RunAgentSetupResponse>>, ApiError> {
-    let executor_profile_id = payload.executor_profile_id;
-    let config = ExecutorConfigs::get_cached();
-    let coding_agent = config.get_coding_agent_or_default(&executor_profile_id);
-    match coding_agent {
-        CodingAgent::CursorAgent(_) => {
-            cursor_setup::run_cursor_setup(&deployment, &task_attempt).await?;
-        }
-        CodingAgent::Codex(codex) => {
-            codex_setup::run_codex_setup(&deployment, &task_attempt, &codex).await?;
-        }
-        _ => return Err(ApiError::Executor(ExecutorError::SetupHelperNotSupported)),
-    }
-
-    Ok(ResponseJson(ApiResponse::success(RunAgentSetupResponse {})))
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -1289,6 +1256,56 @@ pub async fn start_dev_server(
     Ok(ResponseJson(ApiResponse::success(())))
 }
 
+#[axum::debug_handler]
+pub async fn run_setup_script(
+    Extension(task_attempt): Extension<TaskAttempt>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    // Ensure worktree exists (recreate if needed for cold task support)
+    let _ = ensure_worktree_path(&deployment, &task_attempt).await?;
+
+    // Get parent task
+    let task = task_attempt
+        .parent_task(&deployment.db().pool)
+        .await?
+        .ok_or(SqlxError::RowNotFound)?;
+
+    // Get parent project
+    let project = task
+        .parent_project(&deployment.db().pool)
+        .await?
+        .ok_or(SqlxError::RowNotFound)?;
+
+    let Some(setup_script) = project
+        .setup_script
+        .filter(|script| !script.trim().is_empty())
+    else {
+        return Ok(ResponseJson(ApiResponse::error(
+            "No setup script configured for this project",
+        )));
+    };
+
+    let executor_action = ExecutorAction::new(
+        ExecutorActionType::ScriptRequest(ScriptRequest {
+            script: setup_script,
+            language: ScriptRequestLanguage::Bash,
+            context: ScriptContext::SetupScript,
+        }),
+        None,
+    );
+
+    deployment
+        .container()
+        .start_execution(
+            &task_attempt,
+            &executor_action,
+            &ExecutionProcessRunReason::SetupScript,
+        )
+        .await?;
+
+    Ok(ResponseJson(ApiResponse::success(())))
+}
+
 pub async fn get_task_attempt_children(
     Extension(task_attempt): Extension<TaskAttempt>,
     State(deployment): State<DeploymentImpl>,
@@ -1321,7 +1338,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/diff", get(get_task_attempt_diff))
         .route("/diff/file", get(get_task_attempt_diff_file))
         .route("/follow-up", post(follow_up))
-        .route("/run-agent-setup", post(run_agent_setup))
+        .route("/run-setup-script", post(run_setup_script))
         .route("/commit-compare", get(compare_commit_to_head))
         .route("/start-dev-server", post(start_dev_server))
         .route("/branch-status", get(get_task_attempt_branch_status))
