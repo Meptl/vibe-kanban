@@ -242,6 +242,10 @@
   overflow-y: hidden;
 }
 
+.diff-card-scroll-container .diff-tailwindcss-wrapper .overflow-x-auto {
+  padding-bottom: 0.6rem;
+}
+
 .diff-tailwindcss-wrapper .whitespace-nowrap {
   white-space: nowrap;
 }

@@ -411,7 +411,7 @@ function DiffCard({
       </div>
 
       {expanded && diffFile && (
-        <div>
+        <div className="diff-card-scroll-container">
           <DiffView
             diffFile={diffFile}
             diffViewWrap={wrapText}
