@@ -220,7 +220,7 @@ impl StandardCodingAgentExecutor for Codex {
 
 impl Codex {
     pub fn base_command() -> &'static str {
-        "npx -y @openai/codex@0.112.0"
+        "npx -y @openai/codex@0.118.0"
     }
 
     pub fn base_command_builder() -> CommandBuilder {
@@ -264,6 +264,7 @@ impl Codex {
             service_tier: None,
             cwd: Some(cwd.to_string_lossy().to_string()),
             approval_policy,
+            approvals_reviewer: None,
             sandbox,
             config: self.build_config_overrides(),
             service_name: None,

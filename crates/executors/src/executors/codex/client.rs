@@ -110,6 +110,7 @@ impl AppServerClient {
                 service_tier: None,
                 cwd: overrides.cwd,
                 approval_policy: overrides.approval_policy,
+                approvals_reviewer: None,
                 sandbox: overrides.sandbox,
                 config: overrides.config,
                 base_instructions: overrides.base_instructions,
