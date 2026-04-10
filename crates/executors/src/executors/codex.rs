@@ -261,12 +261,20 @@ impl Codex {
         ThreadStartParams {
             model: self.model.clone(),
             model_provider: self.model_provider.clone(),
+            service_tier: None,
             cwd: Some(cwd.to_string_lossy().to_string()),
             approval_policy,
             sandbox,
             config: self.build_config_overrides(),
+            service_name: None,
             base_instructions: self.base_instructions.clone(),
             developer_instructions: self.developer_instructions.clone(),
+            personality: None,
+            ephemeral: None,
+            dynamic_tools: None,
+            mock_experimental_field: None,
+            experimental_raw_events: false,
+            persist_extended_history: false,
         }
     }
 

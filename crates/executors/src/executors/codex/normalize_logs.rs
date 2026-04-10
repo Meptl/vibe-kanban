@@ -4,7 +4,6 @@ use codex_app_server_protocol::{
     CommandExecutionStatus, FileUpdateChange, JSONRPCResponse, McpToolCallStatus, PatchApplyStatus,
     ServerNotification, ThreadItem, ThreadResumeResponse, ThreadStartResponse, TurnPlanStepStatus,
 };
-use codex_mcp_types::ContentBlock;
 use codex_protocol::{openai_models::ReasoningEffort, protocol::McpInvocation};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -487,36 +486,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                                 value: Value::String(err.message),
                             });
                         } else if let Some(value) = result {
-                            if value
-                                .content
-                                .iter()
-                                .all(|block| matches!(block, ContentBlock::TextContent(_)))
-                            {
-                                mcp_tool_state.result = Some(ToolResult {
-                                    r#type: ToolResultValueType::Markdown,
-                                    value: Value::String(
-                                        value
-                                            .content
-                                            .iter()
-                                            .map(|block| {
-                                                if let ContentBlock::TextContent(content) = block {
-                                                    content.text.clone()
-                                                } else {
-                                                    unreachable!()
-                                                }
-                                            })
-                                            .collect::<Vec<String>>()
-                                            .join("\n"),
-                                    ),
-                                });
-                            } else {
-                                mcp_tool_state.result = Some(ToolResult {
-                                    r#type: ToolResultValueType::Json,
-                                    value: value.structured_content.unwrap_or_else(|| {
-                                        serde_json::to_value(value.content).unwrap_or_default()
-                                    }),
-                                });
-                            }
+                            mcp_tool_state.result = Some(mcp_tool_result_from_response(value));
                         }
                         let index = add_normalized_entry(
                             &msg_store,
@@ -526,7 +496,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                         mcp_tool_state.index = Some(index);
                         state.mcp_tools.insert(id, mcp_tool_state);
                     }
-                    ThreadItem::WebSearch { id, query } => {
+                    ThreadItem::WebSearch { id, query, .. } => {
                         state.close_streaming_text();
                         let mut web_search_state = WebSearchState::new();
                         web_search_state.query = Some(query);
@@ -638,38 +608,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                                     value: Value::String(err.message),
                                 });
                             } else if let Some(value) = result {
-                                if value
-                                    .content
-                                    .iter()
-                                    .all(|block| matches!(block, ContentBlock::TextContent(_)))
-                                {
-                                    mcp_tool_state.result = Some(ToolResult {
-                                        r#type: ToolResultValueType::Markdown,
-                                        value: Value::String(
-                                            value
-                                                .content
-                                                .iter()
-                                                .map(|block| {
-                                                    if let ContentBlock::TextContent(content) =
-                                                        block
-                                                    {
-                                                        content.text.clone()
-                                                    } else {
-                                                        unreachable!()
-                                                    }
-                                                })
-                                                .collect::<Vec<String>>()
-                                                .join("\n"),
-                                        ),
-                                    });
-                                } else {
-                                    mcp_tool_state.result = Some(ToolResult {
-                                        r#type: ToolResultValueType::Json,
-                                        value: value.structured_content.unwrap_or_else(|| {
-                                            serde_json::to_value(value.content).unwrap_or_default()
-                                        }),
-                                    });
-                                }
+                                mcp_tool_state.result = Some(mcp_tool_result_from_response(value));
                             }
                             if let Some(index) = mcp_tool_state.index {
                                 replace_normalized_entry(
@@ -680,7 +619,7 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                             }
                         }
                     }
-                    ThreadItem::WebSearch { id, query } => {
+                    ThreadItem::WebSearch { id, query, .. } => {
                         state.close_streaming_text();
                         if let Some(mut entry) = state.web_searches.remove(&id) {
                             entry.status = ToolStatus::Success;
@@ -869,6 +808,42 @@ fn build_command_output(stdout: Option<&str>, stderr: Option<&str>) -> Option<St
     } else {
         Some(sections.join("\n\n"))
     }
+}
+
+fn mcp_tool_result_from_response(
+    result: codex_app_server_protocol::McpToolCallResult,
+) -> ToolResult {
+    if let Some(text) = extract_mcp_text_content(&result.content) {
+        return ToolResult {
+            r#type: ToolResultValueType::Markdown,
+            value: Value::String(text),
+        };
+    }
+
+    ToolResult {
+        r#type: ToolResultValueType::Json,
+        value: result
+            .structured_content
+            .unwrap_or_else(|| Value::Array(result.content)),
+    }
+}
+
+fn extract_mcp_text_content(content: &[Value]) -> Option<String> {
+    let mut lines = Vec::with_capacity(content.len());
+    for block in content {
+        let text = block
+            .as_object()
+            .and_then(|obj| {
+                obj.get("type")
+                    .and_then(Value::as_str)
+                    .map(|kind| (obj, kind))
+            })
+            .filter(|(_, kind)| *kind == "text")
+            .and_then(|(obj, _)| obj.get("text").and_then(Value::as_str))
+            .map(str::to_string)?;
+        lines.push(text);
+    }
+    Some(lines.join("\n"))
 }
 
 #[derive(Serialize, Deserialize, Debug)]

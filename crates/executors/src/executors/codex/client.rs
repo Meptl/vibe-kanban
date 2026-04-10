@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     collections::VecDeque,
     io,
     sync::{Arc, OnceLock},
@@ -7,11 +6,12 @@ use std::{
 
 use async_trait::async_trait;
 use codex_app_server_protocol::{
-    ApprovalDecision, ClientNotification, ClientRequest, CommandExecutionRequestApprovalResponse,
+    ClientNotification, ClientRequest, CommandExecutionApprovalDecision,
+    CommandExecutionRequestApprovalResponse, FileChangeApprovalDecision,
     FileChangeRequestApprovalResponse, GetAuthStatusParams, GetAuthStatusResponse,
     InitializeResponse, JSONRPCError, JSONRPCNotification, JSONRPCRequest, JSONRPCResponse,
-    RequestId, ServerNotification, ServerRequest, ThreadResumeParams, ThreadResumeResponse,
-    ThreadStartParams, ThreadStartResponse, TurnStartParams, TurnStartResponse, UserInput,
+    RequestId, ServerRequest, ThreadResumeParams, ThreadResumeResponse, ThreadStartParams,
+    ThreadStartResponse, TurnStartParams, TurnStartResponse, UserInput,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{self, Value, json};
@@ -74,6 +74,7 @@ impl AppServerClient {
                     "experimentalApi": true,
                 }
             })),
+            trace: None,
         };
 
         self.rpc()
@@ -106,12 +107,15 @@ impl AppServerClient {
                 path: Some(rollout_path),
                 model: overrides.model,
                 model_provider: overrides.model_provider,
+                service_tier: None,
                 cwd: overrides.cwd,
                 approval_policy: overrides.approval_policy,
                 sandbox: overrides.sandbox,
                 config: overrides.config,
                 base_instructions: overrides.base_instructions,
                 developer_instructions: overrides.developer_instructions,
+                personality: None,
+                persist_extended_history: false,
                 history: None,
             },
         };
@@ -127,7 +131,10 @@ impl AppServerClient {
             request_id: self.next_request_id(),
             params: TurnStartParams {
                 thread_id,
-                input: vec![UserInput::Text { text: message }],
+                input: vec![UserInput::Text {
+                    text: message,
+                    text_elements: vec![],
+                }],
                 ..Default::default()
             },
         };
@@ -175,7 +182,7 @@ impl AppServerClient {
                         .raw(),
                     )
                     .await?;
-                let (decision, feedback) = self.review_decision_v2(&status).await?;
+                let (decision, feedback) = self.review_file_change_decision(&status);
                 let response = FileChangeRequestApprovalResponse { decision };
                 send_server_response(peer, request_id, response).await?;
                 if let Some(message) = feedback {
@@ -210,7 +217,7 @@ impl AppServerClient {
                     )
                     .await?;
 
-                let (decision, feedback) = self.review_decision_v2(&status).await?;
+                let (decision, feedback) = self.review_command_execution_decision(&status);
                 let response = CommandExecutionRequestApprovalResponse { decision };
                 send_server_response(peer, request_id, response).await?;
                 if let Some(message) = feedback {
@@ -226,6 +233,19 @@ impl AppServerClient {
                     request_id,
                     -32601,
                     "deprecated v1 approval request is not supported",
+                )
+                .await
+            }
+            ServerRequest::ToolRequestUserInput { request_id, .. }
+            | ServerRequest::McpServerElicitationRequest { request_id, .. }
+            | ServerRequest::PermissionsRequestApproval { request_id, .. }
+            | ServerRequest::DynamicToolCall { request_id, .. }
+            | ServerRequest::ChatgptAuthTokensRefresh { request_id, .. } => {
+                send_server_error(
+                    peer,
+                    request_id,
+                    -32601,
+                    "server request is not supported by the Codex executor",
                 )
                 .await
             }
@@ -278,16 +298,16 @@ impl AppServerClient {
         self.rpc().next_request_id()
     }
 
-    async fn review_decision_v2(
+    fn review_file_change_decision(
         &self,
         status: &ApprovalStatus,
-    ) -> Result<(ApprovalDecision, Option<String>), ExecutorError> {
+    ) -> (FileChangeApprovalDecision, Option<String>) {
         if self.auto_approve {
-            return Ok((ApprovalDecision::AcceptForSession, None));
+            return (FileChangeApprovalDecision::AcceptForSession, None);
         }
 
-        let outcome = match status {
-            ApprovalStatus::Approved => (ApprovalDecision::Accept, None),
+        match status {
+            ApprovalStatus::Approved => (FileChangeApprovalDecision::Accept, None),
             ApprovalStatus::Denied { reason } => {
                 let feedback = reason
                     .as_ref()
@@ -295,15 +315,43 @@ impl AppServerClient {
                     .filter(|s| !s.is_empty())
                     .map(|s| s.to_string());
                 if feedback.is_some() {
-                    (ApprovalDecision::Cancel, feedback)
+                    (FileChangeApprovalDecision::Cancel, feedback)
                 } else {
-                    (ApprovalDecision::Decline, None)
+                    (FileChangeApprovalDecision::Decline, None)
                 }
             }
-            ApprovalStatus::TimedOut => (ApprovalDecision::Decline, None),
-            ApprovalStatus::Pending => (ApprovalDecision::Decline, None),
-        };
-        Ok(outcome)
+            ApprovalStatus::TimedOut | ApprovalStatus::Pending => {
+                (FileChangeApprovalDecision::Decline, None)
+            }
+        }
+    }
+
+    fn review_command_execution_decision(
+        &self,
+        status: &ApprovalStatus,
+    ) -> (CommandExecutionApprovalDecision, Option<String>) {
+        if self.auto_approve {
+            return (CommandExecutionApprovalDecision::AcceptForSession, None);
+        }
+
+        match status {
+            ApprovalStatus::Approved => (CommandExecutionApprovalDecision::Accept, None),
+            ApprovalStatus::Denied { reason } => {
+                let feedback = reason
+                    .as_ref()
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string());
+                if feedback.is_some() {
+                    (CommandExecutionApprovalDecision::Cancel, feedback)
+                } else {
+                    (CommandExecutionApprovalDecision::Decline, None)
+                }
+            }
+            ApprovalStatus::TimedOut | ApprovalStatus::Pending => {
+                (CommandExecutionApprovalDecision::Decline, None)
+            }
+        }
     }
 
     async fn enqueue_feedback(&self, message: String) {
@@ -349,6 +397,7 @@ impl AppServerClient {
                 thread_id,
                 input: vec![UserInput::Text {
                     text: format!("User feedback: {feedback}"),
+                    text_elements: vec![],
                 }],
                 ..Default::default()
             },
@@ -410,21 +459,7 @@ impl JsonRpcCallbacks for AppServerClient {
         raw: &str,
         notification: JSONRPCNotification,
     ) -> Result<bool, ExecutorError> {
-        let raw =
-            if let Ok(mut server_notification) = serde_json::from_str::<ServerNotification>(raw) {
-                if let ServerNotification::SessionConfigured(session_configured) =
-                    &mut server_notification
-                {
-                    // history can be large, which might get truncated during transmission, corrupting the JSON line and losing valuable session and model information.
-                    session_configured.initial_messages = None;
-                    Cow::Owned(serde_json::to_string(&server_notification)?)
-                } else {
-                    Cow::Borrowed(raw)
-                }
-            } else {
-                Cow::Borrowed(raw)
-            };
-        self.log_writer.log_raw(&raw).await?;
+        self.log_writer.log_raw(raw).await?;
         if notification.method == "turn/aborted" {
             tracing::debug!("codex turn aborted; flushing feedback queue");
             self.flush_pending_feedback().await;

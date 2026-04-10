@@ -15,3 +15,4 @@ This directory defines the high-level concepts, business logic, and architecture
 - [[settings-storage]] — Documents where settings are persisted across config files, SQLite tables, and browser local storage.
 - [[merge-dirty-worktree-blocking]] — Documents blocking merge when the base worktree has tracked local edits and surfacing a user warning instead of creating a chore commit.
 - [[task-follow-up-setup-action]] — Documents the follow-up action-bar Run Setup control placed immediately left of Send and how it reruns the project setup script.
+- [[codex-thread-resume-compatibility]] — Documents protocol dependency updates that add native `ContextCompaction` decoding for `thread/resume`.
