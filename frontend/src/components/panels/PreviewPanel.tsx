@@ -16,6 +16,8 @@ import { PreviewToolbar } from '@/components/tasks/TaskDetails/preview/PreviewTo
 import { NoServerContent } from '@/components/tasks/TaskDetails/preview/NoServerContent';
 import { ReadyContent } from '@/components/tasks/TaskDetails/preview/ReadyContent';
 
+const autoStartHandledAttempts = new Set<string>();
+
 function normalizePreviewNavigationTarget(
   rawTarget: string,
   currentUrl?: string
@@ -56,7 +58,6 @@ export function PreviewPanel() {
   const [previewDisplayUrl, setPreviewDisplayUrl] = useState<string>();
   const listenerRef = useRef<ClickToComponentListener | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const hasAttemptedAutoStartRef = useRef(false);
   const autoExpandedNoUrlLogsProcessIdRef = useRef<string | null>(null);
 
   const { t } = useTranslation('tasks');
@@ -277,21 +278,17 @@ export function PreviewPanel() {
   }, [startDevServer]);
 
   useEffect(() => {
-    hasAttemptedAutoStartRef.current = false;
-  }, [attemptId]);
-
-  useEffect(() => {
     if (!attemptId) return;
     if (!projectHasDevScript) return;
-    if (hasAttemptedAutoStartRef.current) return;
+    if (autoStartHandledAttempts.has(attemptId)) return;
     if (runningDevServer || isStartingDevServer) {
       // Treat existing/in-flight servers as already handled so we do not
       // auto-restart after users stop the preview server.
-      hasAttemptedAutoStartRef.current = true;
+      autoStartHandledAttempts.add(attemptId);
       return;
     }
 
-    hasAttemptedAutoStartRef.current = true;
+    autoStartHandledAttempts.add(attemptId);
     handleStartDevServer();
   }, [
     attemptId,
