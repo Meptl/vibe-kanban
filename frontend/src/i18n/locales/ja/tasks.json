@@ -217,7 +217,6 @@
       "setupPrompt": "ライブプレビューとクリックして編集機能を使用するには、このプロジェクトに開発サーバースクリプトを追加してください。",
       "startButton": "開発サーバーを開始",
       "startPrompt": "プレビューを表示するには開発サーバーを起動してください",
-      "stopAndEditButton": "開発サーバーを停止して問題を解決",
       "title": "開発サーバーが実行されていません"
     },
     "selectAttempt": "Select an attempt to see preview",

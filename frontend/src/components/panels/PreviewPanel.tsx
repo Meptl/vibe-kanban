@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDevserverPreview } from '@/hooks/useDevserverPreview';
 import { useDevServer } from '@/hooks/useDevServer';
@@ -276,14 +276,6 @@ export function PreviewPanel() {
     setShowHelp(false);
   }, [startDevServer]);
 
-  const handleStopAndEdit = () => {
-    stopDevServer(undefined, {
-      onSuccess: () => {
-        setShowHelp(false);
-      },
-    });
-  };
-
   useEffect(() => {
     hasAttemptedAutoStartRef.current = false;
   }, [attemptId]);
@@ -357,17 +349,6 @@ export function PreviewPanel() {
           <Alert variant="destructive" className="py-2">
             <div className="flex items-center justify-between gap-2">
               <p className="flex-1 text-sm">{t('preview.troubleAlert.title')}</p>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleStopAndEdit}
-                disabled={isStoppingDevServer}
-              >
-                {isStoppingDevServer && (
-                  <Loader2 className="mr-2 animate-spin" />
-                )}
-                {t('preview.noServer.stopAndEditButton')}
-              </Button>
               <Button
                 variant="ghost"
                 size="sm"

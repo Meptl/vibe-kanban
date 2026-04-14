@@ -217,7 +217,6 @@
       "setupPrompt": "라이브 미리보기 및 클릭하여 편집을 사용하려면 이 프로젝트에 개발 서버 스크립트를 추가하세요.",
       "startButton": "개발 서버 시작",
       "startPrompt": "미리보기를 보려면 개발 서버를 시작하세요",
-      "stopAndEditButton": "개발 서버 중지 및 문제 해결",
       "title": "실행 중인 개발 서버 없음"
     },
     "selectAttempt": "Select an attempt to see preview",

@@ -217,7 +217,6 @@
       "setupPrompt": "Para usar la vista previa en vivo y la función de hacer clic y editar, por favor agrega un script de servidor de desarrollo a este proyecto.",
       "startButton": "Iniciar Servidor de Desarrollo",
       "startPrompt": "Por favor inicia un servidor de desarrollo para ver la vista previa",
-      "stopAndEditButton": "Detener Servidor de Desarrollo y Resolver Problemas",
       "title": "No hay servidor de desarrollo en ejecución"
     },
     "selectAttempt": "Select an attempt to see preview",

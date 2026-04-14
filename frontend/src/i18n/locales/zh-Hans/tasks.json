@@ -58,8 +58,7 @@
       "companionPrompt": "要使用点击编辑功能，请将浏览器伴侣添加到您的项目。",
       "companionLink": "查看安装指南",
       "startButton": "启动开发服务器",
-      "editButton": "编辑开发脚本",
-      "stopAndEditButton": "停止开发服务器并解决问题"
+      "editButton": "编辑开发脚本"
     },
     "devScript": {
       "saveAndStart": "保存并启动",
