@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import type { Operation } from 'rfc6902';
 import { applyUpsertPatch } from '@/utils/jsonPatch';
 
@@ -48,23 +48,41 @@ export const useJsonPatchWsStream = <T extends object>(
   const retryAttemptsRef = useRef<number>(0);
   const [retryNonce, setRetryNonce] = useState(0);
   const finishedRef = useRef<boolean>(false);
+  const streamKeyRef = useRef<string | null>(null);
 
   const injectInitialEntry = options?.injectInitialEntry;
   const deduplicatePatches = options?.deduplicatePatches;
   const treatFinishedAsTerminal = options?.treatFinishedAsTerminal ?? true;
 
-  function scheduleReconnect() {
+  const scheduleReconnect = useCallback((streamLabel: string) => {
     if (retryTimerRef.current) return; // already scheduled
     // Exponential backoff with cap: 1s, 2s, 4s, 8s (max), then stay at 8s
     const attempt = retryAttemptsRef.current;
     const delay = Math.min(8000, 1000 * Math.pow(2, attempt));
+    console.debug(
+      `[ws-stream] schedule reconnect endpoint=${streamLabel} attempt=${attempt} delay_ms=${delay}`
+    );
     retryTimerRef.current = window.setTimeout(() => {
       retryTimerRef.current = null;
       setRetryNonce((n) => n + 1);
     }, delay);
-  }
+  }, []);
 
   useEffect(() => {
+    const streamKey = enabled && endpoint ? endpoint : null;
+    if (streamKeyRef.current !== streamKey) {
+      streamKeyRef.current = streamKey;
+      dataRef.current = undefined;
+      setData(undefined);
+      setIsFinished(false);
+      finishedRef.current = false;
+      retryAttemptsRef.current = 0;
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    }
+
     if (!enabled || !endpoint) {
       // Close connection and reset state
       if (wsRef.current) {
@@ -97,15 +115,14 @@ export const useJsonPatchWsStream = <T extends object>(
 
     // Create WebSocket if it doesn't exist
     if (!wsRef.current) {
-      // Reset finished flag for new connection
-      finishedRef.current = false;
-      setIsFinished(false);
-
       // Convert HTTP endpoint to WebSocket endpoint
       const wsEndpoint = endpoint.replace(/^http/, 'ws');
       const ws = new WebSocket(wsEndpoint);
 
       ws.onopen = () => {
+        console.debug(
+          `[ws-stream] open endpoint=${endpoint ?? 'unknown-endpoint'} terminal=${treatFinishedAsTerminal}`
+        );
         setError(null);
         setIsConnected(true);
         // Reset backoff on successful connection
@@ -162,21 +179,26 @@ export const useJsonPatchWsStream = <T extends object>(
       };
 
       ws.onclose = (evt) => {
+        console.debug(
+          `[ws-stream] close endpoint=${endpoint ?? 'unknown-endpoint'} code=${evt?.code ?? 'na'} clean=${evt?.wasClean ?? false} reason=${evt?.reason || ''} terminal=${treatFinishedAsTerminal} finished=${finishedRef.current}`
+        );
         setIsConnected(false);
         wsRef.current = null;
 
-        // Do not reconnect if we received a finished message or clean close
+        // For terminal streams, clean closes are expected and should not reconnect.
+        // For non-terminal streams, reconnect even after clean closes to stay live.
         if (
           finishedRef.current ||
-          (evt?.code === 1000 && evt?.wasClean) ||
-          evt?.reason === 'finished'
+          (treatFinishedAsTerminal &&
+            (evt?.reason === 'finished' ||
+              (evt?.code === 1000 && evt?.wasClean)))
         ) {
           return;
         }
 
         // Otherwise, reconnect on unexpected/error closures
         retryAttemptsRef.current += 1;
-        scheduleReconnect();
+        scheduleReconnect(endpoint ?? 'unknown-endpoint');
       };
 
       wsRef.current = ws;
@@ -200,10 +222,6 @@ export const useJsonPatchWsStream = <T extends object>(
         window.clearTimeout(retryTimerRef.current);
         retryTimerRef.current = null;
       }
-      finishedRef.current = false;
-      dataRef.current = undefined;
-      setData(undefined);
-      setIsFinished(false);
     };
   }, [
     endpoint,
@@ -212,6 +230,7 @@ export const useJsonPatchWsStream = <T extends object>(
     injectInitialEntry,
     deduplicatePatches,
     treatFinishedAsTerminal,
+    scheduleReconnect,
     retryNonce,
   ]);
 
