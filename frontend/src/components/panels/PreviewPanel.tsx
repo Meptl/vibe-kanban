@@ -285,10 +285,19 @@ export function PreviewPanel() {
   };
 
   useEffect(() => {
+    hasAttemptedAutoStartRef.current = false;
+  }, [attemptId]);
+
+  useEffect(() => {
     if (!attemptId) return;
     if (!projectHasDevScript) return;
     if (hasAttemptedAutoStartRef.current) return;
-    if (runningDevServer || isStartingDevServer) return;
+    if (runningDevServer || isStartingDevServer) {
+      // Treat existing/in-flight servers as already handled so we do not
+      // auto-restart after users stop the preview server.
+      hasAttemptedAutoStartRef.current = true;
+      return;
+    }
 
     hasAttemptedAutoStartRef.current = true;
     handleStartDevServer();
