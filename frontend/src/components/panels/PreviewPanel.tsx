@@ -315,40 +315,20 @@ export function PreviewPanel() {
         )}
 
         {showHelp && (
-          <Alert variant="destructive" className="space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 space-y-2">
-                <p className="font-bold">{t('preview.troubleAlert.title')}</p>
-                <ol className="list-decimal list-inside space-y-2">
-                  <li>{t('preview.troubleAlert.item1')}</li>
-                  <li>
-                    {t('preview.troubleAlert.item2')}{' '}
-                    <code>http://localhost:3000</code>
-                    {t('preview.troubleAlert.item2Suffix')}
-                  </li>
-                  <li>
-                    {t('preview.troubleAlert.item3')}{' '}
-                    <a
-                      href="https://github.com/BloopAI/vibe-kanban-web-companion"
-                      target="_blank"
-                      className="underline font-bold"
-                    >
-                      {t('preview.troubleAlert.item3Link')}
-                    </a>
-                    .
-                  </li>
-                </ol>
-                <Button
-                  variant="destructive"
-                  onClick={handleStopAndEdit}
-                  disabled={isStoppingDevServer}
-                >
-                  {isStoppingDevServer && (
-                    <Loader2 className="mr-2 animate-spin" />
-                  )}
-                  {t('preview.noServer.stopAndEditButton')}
-                </Button>
-              </div>
+          <Alert variant="destructive" className="py-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex-1 text-sm">{t('preview.troubleAlert.title')}</p>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleStopAndEdit}
+                disabled={isStoppingDevServer}
+              >
+                {isStoppingDevServer && (
+                  <Loader2 className="mr-2 animate-spin" />
+                )}
+                {t('preview.noServer.stopAndEditButton')}
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
