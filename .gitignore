@@ -93,4 +93,4 @@ vibe-kanban-cloud/
 remote-frontend/dist
 .codex
 
-lat.md/.cache
+out
