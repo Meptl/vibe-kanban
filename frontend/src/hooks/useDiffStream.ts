@@ -1,14 +1,5 @@
-import { useCallback, useMemo } from 'react';
-import type { DiffMetadata, PatchType } from 'shared/types';
-import { useJsonPatchWsStream } from './useJsonPatchWsStream';
-
-interface DiffEntries {
-  [filePath: string]: PatchType;
-}
-
-type DiffStreamEvent = {
-  entries: DiffEntries;
-};
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DiffMetadata } from 'shared/types';
 
 interface UseDiffStreamResult {
   diffs: DiffMetadata[];
@@ -16,37 +7,141 @@ interface UseDiffStreamResult {
   error: string | null;
 }
 
+type DiffMetadataWsMessage =
+  | {
+      type: 'snapshot';
+      entries: Record<string, DiffMetadata>;
+    }
+  | {
+      type: 'upsert';
+      path: string;
+      diff: DiffMetadata;
+    }
+  | {
+      type: 'remove';
+      path: string;
+    }
+  | {
+      type: 'finished';
+    };
+
 export const useDiffStream = (
   attemptId: string | null,
   enabled: boolean
 ): UseDiffStreamResult => {
-  const endpoint = (() => {
-    if (!attemptId) return undefined;
-    return `/api/task-attempts/${attemptId}/diff-metadata-ws`;
-  })();
+  const [entries, setEntries] = useState<Record<string, DiffMetadata>>({});
+  const [isFinished, setIsFinished] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryAttemptsRef = useRef<number>(0);
+  const [retryNonce, setRetryNonce] = useState(0);
 
-  const initialData = useCallback(
-    (): DiffStreamEvent => ({
-      entries: {},
-    }),
-    []
-  );
-
-  const { data, error, isFinished } = useJsonPatchWsStream<DiffStreamEvent>(
-    endpoint,
-    enabled && !!attemptId,
-    initialData,
-    {
-      // Diff stream remains open for live updates after initial snapshot.
-      treatFinishedAsTerminal: false,
+  useEffect(() => {
+    if (!enabled || !attemptId) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+      retryAttemptsRef.current = 0;
+      setEntries({});
+      setIsFinished(false);
+      setError(null);
+      return;
     }
-  );
+
+    setEntries({});
+    setIsFinished(false);
+    setError(null);
+
+    const httpEndpoint = `/api/task-attempts/${attemptId}/diff-metadata-ws`;
+    const wsEndpoint = httpEndpoint.startsWith('http')
+      ? httpEndpoint.replace(/^http/, 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${
+          window.location.host
+        }${httpEndpoint}`;
+    const ws = new WebSocket(wsEndpoint);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setError(null);
+      retryAttemptsRef.current = 0;
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg: DiffMetadataWsMessage = JSON.parse(event.data);
+        if (msg.type === 'snapshot') {
+          setEntries(msg.entries);
+          return;
+        }
+        if (msg.type === 'upsert') {
+          setEntries((prev) => ({
+            ...prev,
+            [msg.path]: msg.diff,
+          }));
+          return;
+        }
+        if (msg.type === 'remove') {
+          setEntries((prev) => {
+            if (!(msg.path in prev)) return prev;
+            const next = { ...prev };
+            delete next[msg.path];
+            return next;
+          });
+          return;
+        }
+        if (msg.type === 'finished') {
+          setIsFinished(true);
+        }
+      } catch (err) {
+        console.error('Failed to process diff metadata message:', err);
+        setError('Failed to process stream update');
+      }
+    };
+
+    ws.onerror = () => {
+      setError('Connection failed');
+    };
+
+    ws.onclose = () => {
+      wsRef.current = null;
+      retryAttemptsRef.current += 1;
+      const delay = Math.min(8000, 1000 * Math.pow(2, retryAttemptsRef.current));
+      retryTimerRef.current = window.setTimeout(() => {
+        retryTimerRef.current = null;
+        setRetryNonce((n) => n + 1);
+      }, delay);
+    };
+
+    return () => {
+      if (wsRef.current) {
+        const socket = wsRef.current;
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.close();
+        wsRef.current = null;
+      }
+      if (retryTimerRef.current) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, [attemptId, enabled, retryNonce]);
 
   const diffs = useMemo(() => {
-    return Object.values(data?.entries ?? {})
-      .filter((entry) => entry?.type === 'DIFF_METADATA')
-      .map((entry) => entry.content);
-  }, [data?.entries]);
+    return Object.values(entries);
+  }, [entries]);
 
   return { diffs, isComplete: isFinished, error };
 };

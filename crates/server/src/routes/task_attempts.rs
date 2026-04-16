@@ -34,7 +34,7 @@ use executors::{
 use git2::BranchType;
 use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 use services::services::{
     container::ContainerService,
     git::{ConflictOp, DiffDetailLevel, DiffTarget, GitService, WorktreeResetOptions},
@@ -42,7 +42,7 @@ use services::services::{
 use sqlx::Error as SqlxError;
 use ts_rs::TS;
 use utils::{
-    diff::{Diff, DiffChangeKind, create_unified_diff},
+    diff::{Diff, DiffChangeKind, DiffMetadata, create_unified_diff},
     response::ApiResponse,
 };
 use uuid::Uuid;
@@ -571,30 +571,162 @@ pub async fn stream_task_attempt_diff_metadata_ws(
     })
 }
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum DiffMetadataWsMessage {
+    Snapshot { entries: std::collections::HashMap<String, DiffMetadata> },
+    Upsert { path: String, diff: DiffMetadata },
+    Remove { path: String },
+    Finished,
+}
+
+enum DiffMetadataPatchEvent {
+    Upsert { path: String, diff: DiffMetadata },
+    Remove { path: String },
+}
+
+fn unescape_json_pointer_segment(input: &str) -> String {
+    input.replace("~1", "/").replace("~0", "~")
+}
+
+fn parse_diff_metadata_patch_events(patch: &Value) -> Vec<DiffMetadataPatchEvent> {
+    let mut events = Vec::new();
+    let Some(ops) = patch.as_array() else {
+        return events;
+    };
+
+    for op in ops {
+        let Some(op_kind) = op.get("op").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(path) = op.get("path").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(key) = path.strip_prefix("/entries/") else {
+            continue;
+        };
+        let decoded_path = unescape_json_pointer_segment(key);
+
+        match op_kind {
+            "add" | "replace" => {
+                let Some(content) = op
+                    .get("value")
+                    .and_then(|v| v.get("type").and_then(Value::as_str).map(|_| v))
+                    .and_then(|v| {
+                        if v.get("type").and_then(Value::as_str) == Some("DIFF_METADATA") {
+                            v.get("content")
+                        } else {
+                            None
+                        }
+                    })
+                else {
+                    continue;
+                };
+
+                let Ok(diff) = serde_json::from_value::<DiffMetadata>(content.clone()) else {
+                    continue;
+                };
+                events.push(DiffMetadataPatchEvent::Upsert {
+                    path: decoded_path,
+                    diff,
+                });
+            }
+            "remove" => {
+                events.push(DiffMetadataPatchEvent::Remove { path: decoded_path });
+            }
+            _ => {}
+        }
+    }
+
+    events
+}
+
+async fn send_diff_ws_message(
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    message: DiffMetadataWsMessage,
+) -> anyhow::Result<()> {
+    use futures_util::SinkExt;
+
+    let payload = serde_json::to_string(&message)?;
+    sender.send(Message::Text(payload.into())).await?;
+    Ok(())
+}
+
 async fn handle_task_attempt_diff_ws(
     socket: WebSocket,
     deployment: DeploymentImpl,
     task_attempt: TaskAttempt,
 ) -> anyhow::Result<()> {
-    use futures_util::{SinkExt, StreamExt, TryStreamExt};
+    use futures_util::{SinkExt, StreamExt};
     use utils::log_msg::LogMsg;
 
     let stream = deployment.container().stream_diff(&task_attempt).await?;
 
-    let mut stream = stream.map_ok(|msg: LogMsg| msg.to_ws_message_unchecked());
+    let mut stream = stream;
 
     let (mut sender, mut receiver) = socket.split();
+    let mut initial_snapshot_complete = false;
+    let mut initial_entries: std::collections::HashMap<String, DiffMetadata> =
+        std::collections::HashMap::new();
 
     loop {
         tokio::select! {
             // Wait for next stream item
             item = stream.next() => {
                 match item {
-                    Some(Ok(msg)) => {
-                        if sender.send(msg).await.is_err() {
+                    Some(Ok(LogMsg::JsonPatch(patch))) => {
+                        let patch_value = serde_json::to_value(&patch).unwrap_or(Value::Null);
+                        let events = parse_diff_metadata_patch_events(&patch_value);
+                        if initial_snapshot_complete {
+                            for event in events {
+                                let out_msg = match event {
+                                    DiffMetadataPatchEvent::Upsert { path, diff } => {
+                                        DiffMetadataWsMessage::Upsert { path, diff }
+                                    }
+                                    DiffMetadataPatchEvent::Remove { path } => {
+                                        DiffMetadataWsMessage::Remove { path }
+                                    }
+                                };
+                                if send_diff_ws_message(&mut sender, out_msg).await.is_err() {
+                                    break;
+                                }
+                            }
+                        } else {
+                            for event in events {
+                                match event {
+                                    DiffMetadataPatchEvent::Upsert { path, diff } => {
+                                        initial_entries.insert(path, diff);
+                                    }
+                                    DiffMetadataPatchEvent::Remove { path } => {
+                                        initial_entries.remove(&path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Some(Ok(LogMsg::Finished)) => {
+                        if !initial_snapshot_complete {
+                            initial_snapshot_complete = true;
+                            if send_diff_ws_message(
+                                &mut sender,
+                                DiffMetadataWsMessage::Snapshot {
+                                    entries: std::mem::take(&mut initial_entries),
+                                },
+                            )
+                            .await
+                            .is_err()
+                            {
+                                break;
+                            }
+                        }
+                        if send_diff_ws_message(&mut sender, DiffMetadataWsMessage::Finished)
+                            .await
+                            .is_err()
+                        {
                             break;
                         }
                     }
+                    Some(Ok(_)) => {}
                     Some(Err(e)) => {
                         tracing::error!("stream error: {}", e);
                         break;

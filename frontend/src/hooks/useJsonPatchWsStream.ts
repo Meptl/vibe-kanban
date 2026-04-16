@@ -15,11 +15,6 @@ interface UseJsonPatchStreamOptions<T> {
    * Filter/deduplicate patches before applying them
    */
   deduplicatePatches?: (patches: Operation[]) => Operation[];
-  /**
-   * Whether a {finished: true} message should close the socket and stop reconnect.
-   * Defaults to true for terminal streams.
-   */
-  treatFinishedAsTerminal?: boolean;
 }
 
 interface UseJsonPatchStreamResult<T> {
@@ -52,7 +47,6 @@ export const useJsonPatchWsStream = <T extends object>(
 
   const injectInitialEntry = options?.injectInitialEntry;
   const deduplicatePatches = options?.deduplicatePatches;
-  const treatFinishedAsTerminal = options?.treatFinishedAsTerminal ?? true;
 
   const scheduleReconnect = useCallback((streamLabel: string) => {
     if (retryTimerRef.current) return; // already scheduled
@@ -121,7 +115,7 @@ export const useJsonPatchWsStream = <T extends object>(
 
       ws.onopen = () => {
         console.debug(
-          `[ws-stream] open endpoint=${endpoint ?? 'unknown-endpoint'} terminal=${treatFinishedAsTerminal}`
+          `[ws-stream] open endpoint=${endpoint ?? 'unknown-endpoint'}`
         );
         setError(null);
         setIsConnected(true);
@@ -158,15 +152,12 @@ export const useJsonPatchWsStream = <T extends object>(
           }
 
           // Handle finished messages ({finished: true})
-          // Optionally treat finished as terminal - default is terminal.
           if ('finished' in msg) {
             setIsFinished(true);
-            if (treatFinishedAsTerminal) {
-              finishedRef.current = true;
-              ws.close(1000, 'finished');
-              wsRef.current = null;
-              setIsConnected(false);
-            }
+            finishedRef.current = true;
+            ws.close(1000, 'finished');
+            wsRef.current = null;
+            setIsConnected(false);
           }
         } catch (err) {
           console.error('Failed to process WebSocket message:', err);
@@ -180,7 +171,7 @@ export const useJsonPatchWsStream = <T extends object>(
 
       ws.onclose = (evt) => {
         console.debug(
-          `[ws-stream] close endpoint=${endpoint ?? 'unknown-endpoint'} code=${evt?.code ?? 'na'} clean=${evt?.wasClean ?? false} reason=${evt?.reason || ''} terminal=${treatFinishedAsTerminal} finished=${finishedRef.current}`
+          `[ws-stream] close endpoint=${endpoint ?? 'unknown-endpoint'} code=${evt?.code ?? 'na'} clean=${evt?.wasClean ?? false} reason=${evt?.reason || ''} finished=${finishedRef.current}`
         );
         setIsConnected(false);
         wsRef.current = null;
@@ -193,14 +184,7 @@ export const useJsonPatchWsStream = <T extends object>(
           return;
         }
 
-        // For terminal streams, clean closes are expected and should not reconnect.
-        // For non-terminal streams, reconnect even after clean closes to stay live.
-        if (
-          finishedRef.current ||
-          (treatFinishedAsTerminal &&
-            (evt?.reason === 'finished' ||
-              (evt?.code === 1000 && evt?.wasClean)))
-        ) {
+        if (finishedRef.current || evt?.reason === 'finished') {
           return;
         }
 
@@ -237,7 +221,6 @@ export const useJsonPatchWsStream = <T extends object>(
     initialData,
     injectInitialEntry,
     deduplicatePatches,
-    treatFinishedAsTerminal,
     scheduleReconnect,
     retryNonce,
   ]);
