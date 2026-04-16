@@ -34,6 +34,7 @@ use executors::{
 use git2::BranchType;
 use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use services::services::{
     container::ContainerService,
     git::{ConflictOp, DiffDetailLevel, DiffTarget, GitService, WorktreeResetOptions},
@@ -70,9 +71,9 @@ pub struct TaskAttemptQuery {
     pub task_id: Option<Uuid>,
 }
 
-#[derive(Debug, Deserialize, TS)]
-pub struct DiffFileQuery {
-    pub path: String,
+#[derive(Debug, Deserialize)]
+pub struct DiffQuery {
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -160,9 +161,15 @@ pub async fn get_task_attempt(
 }
 
 pub async fn get_task_attempt_diff(
+    Query(query): Query<DiffQuery>,
     Extension(task_attempt): Extension<TaskAttempt>,
     State(deployment): State<DeploymentImpl>,
-) -> Result<ResponseJson<ApiResponse<TaskAttemptDiffResponse>>, ApiError> {
+) -> Result<ResponseJson<ApiResponse<serde_json::Value>>, ApiError> {
+    if let Some(file_path) = query.file {
+        let diff = get_task_attempt_diff_for_file(file_path, &task_attempt, &deployment).await?;
+        return Ok(ResponseJson(ApiResponse::success(json!(diff))));
+    }
+
     let pool = &deployment.db().pool;
 
     let task = task_attempt
@@ -219,24 +226,21 @@ pub async fn get_task_attempt_diff(
     };
 
     let built = build_patch_from_diffs(diffs);
-    Ok(ResponseJson(ApiResponse::success(
-        TaskAttemptDiffResponse {
-            attempt_id: task_attempt.id,
-            patch: built.patch,
-            omitted_files: built.omitted_files,
-        },
-    )))
+    Ok(ResponseJson(ApiResponse::success(json!(TaskAttemptDiffResponse {
+        attempt_id: task_attempt.id,
+        patch: built.patch,
+        omitted_files: built.omitted_files,
+    }))))
 }
 
-pub async fn get_task_attempt_diff_file(
-    Query(query): Query<DiffFileQuery>,
-    Extension(task_attempt): Extension<TaskAttempt>,
-    State(deployment): State<DeploymentImpl>,
-) -> Result<ResponseJson<ApiResponse<Diff>>, ApiError> {
+async fn get_task_attempt_diff_for_file(
+    file_path: String,
+    task_attempt: &TaskAttempt,
+    deployment: &DeploymentImpl,
+) -> Result<Diff, ApiError> {
     // @lat: [[lazy-diff-loading#On-Demand File Content Fetch]]
     let started_at = Instant::now();
     let pool = &deployment.db().pool;
-    let file_path = query.path;
 
     let task = task_attempt
         .parent_task(pool)
@@ -312,7 +316,7 @@ pub async fn get_task_attempt_diff_file(
         "diff-file timing"
     );
 
-    Ok(ResponseJson(ApiResponse::success(diff)))
+    Ok(diff)
 }
 
 #[derive(Debug, Serialize, Deserialize, ts_rs::TS)]
@@ -1335,7 +1339,6 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
     let task_attempt_id_router = Router::new()
         .route("/", get(get_task_attempt))
         .route("/diff", get(get_task_attempt_diff))
-        .route("/diff/file", get(get_task_attempt_diff_file))
         .route("/follow-up", post(follow_up))
         .route("/run-setup-script", post(run_setup_script))
         .route("/commit-compare", get(compare_commit_to_head))

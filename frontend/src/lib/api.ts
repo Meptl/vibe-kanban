@@ -479,7 +479,7 @@ export const attemptsApi = {
 
   getDiffFile: async (attemptId: string, path: string): Promise<Diff> => {
     const response = await makeRequest(
-      `/api/task-attempts/${attemptId}/diff/file?path=${encodeURIComponent(path)}`
+      `/api/task-attempts/${attemptId}/diff?file=${encodeURIComponent(path)}`
     );
     return handleApiResponse<Diff>(response);
   },
