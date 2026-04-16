@@ -36,9 +36,21 @@ export const useDiffStream = (
   const retryTimerRef = useRef<number | null>(null);
   const retryAttemptsRef = useRef<number>(0);
   const [retryNonce, setRetryNonce] = useState(0);
+  const streamKey = enabled && attemptId ? attemptId : null;
 
   useEffect(() => {
-    if (!enabled || !attemptId) {
+    setEntries({});
+    setIsFinished(false);
+    setError(null);
+    retryAttemptsRef.current = 0;
+    if (retryTimerRef.current) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, [streamKey]);
+
+  useEffect(() => {
+    if (!streamKey) {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -48,23 +60,17 @@ export const useDiffStream = (
         retryTimerRef.current = null;
       }
       retryAttemptsRef.current = 0;
-      setEntries({});
-      setIsFinished(false);
-      setError(null);
       return;
     }
 
-    setEntries({});
-    setIsFinished(false);
-    setError(null);
-
-    const httpEndpoint = `/api/task-attempts/${attemptId}/diff-metadata-ws`;
+    const httpEndpoint = `/api/task-attempts/${streamKey}/diff-metadata-ws`;
     const wsEndpoint = httpEndpoint.startsWith('http')
       ? httpEndpoint.replace(/^http/, 'ws')
       : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${
           window.location.host
         }${httpEndpoint}`;
     const ws = new WebSocket(wsEndpoint);
+    let sawFinished = false;
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -101,6 +107,9 @@ export const useDiffStream = (
         }
         if (msg.type === 'finished') {
           setIsFinished(true);
+          sawFinished = true;
+          ws.close(1000, 'finished');
+          wsRef.current = null;
         }
       } catch (err) {
         console.error('Failed to process diff metadata message:', err);
@@ -112,8 +121,11 @@ export const useDiffStream = (
       setError('Connection failed');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (evt) => {
       wsRef.current = null;
+      if (sawFinished || evt?.reason === 'finished') {
+        return;
+      }
       retryAttemptsRef.current += 1;
       const delay = Math.min(8000, 1000 * Math.pow(2, retryAttemptsRef.current));
       retryTimerRef.current = window.setTimeout(() => {
@@ -137,7 +149,7 @@ export const useDiffStream = (
         retryTimerRef.current = null;
       }
     };
-  }, [attemptId, enabled, retryNonce]);
+  }, [streamKey, retryNonce]);
 
   const diffs = useMemo(() => {
     return Object.values(entries);
