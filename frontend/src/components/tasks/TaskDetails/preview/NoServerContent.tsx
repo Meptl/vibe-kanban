@@ -115,7 +115,11 @@ export function NoServerContent({
 
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="text-center space-y-6 max-w-md mx-auto p-6">
+      <div
+        className={`text-center space-y-6 mx-auto p-6 ${
+          isEditingExistingScript ? 'max-w-[56rem] w-full' : 'max-w-md'
+        }`}
+      >
         <div className="flex items-center justify-center">
           <SquareTerminal className="h-8 w-8 text-muted-foreground" />
         </div>
@@ -123,15 +127,10 @@ export function NoServerContent({
         <div className="space-y-4">
           <div>
             <h3 className="text-lg font-medium text-foreground mb-2">
-              {projectHasDevScript
-                ? t('preview.noServer.title')
-                : t('preview.noServer.noPreviewTitle')}
+              {isEditingExistingScript
+                ? 'Editting dev script'
+                : t('preview.noServer.title')}
             </h3>
-            {projectHasDevScript && (
-              <p className="text-sm text-muted-foreground">
-                {t('preview.noServer.startPrompt')}
-              </p>
-            )}
           </div>
 
           {!isEditingExistingScript ? (
