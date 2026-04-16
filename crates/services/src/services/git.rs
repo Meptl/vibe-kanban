@@ -816,6 +816,9 @@ impl GitService {
         let task_repo = self.open_repo(task_worktree_path)?;
         let base_repo = self.open_repo(base_worktree_path)?;
 
+        // Persist pending task worktree edits so merge includes local changes.
+        self.auto_commit_changes_if_any(task_worktree_path, "merge", true, None)?;
+
         // Check if base branch is ahead of task branch - this indicates the base has moved
         // ahead since the task was created, which should block the merge
         let (_, task_behind) =

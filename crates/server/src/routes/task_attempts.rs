@@ -673,6 +673,12 @@ pub async fn merge_task_attempt(
         .ok_or(ApiError::TaskAttempt(TaskAttemptError::TaskNotFound))?;
     let ctx = TaskAttempt::load_context(pool, task_attempt.id, task.id, task.project_id).await?;
 
+    if ctx.task_attempt.branch == "main" {
+        return Ok(ResponseJson(ApiResponse::error(
+            "Cannot merge: task attempt worktree is on 'main'.",
+        )));
+    }
+
     let worktree_path_buf = ensure_worktree_path(&deployment, &task_attempt).await?;
     let worktree_path = worktree_path_buf.as_path();
 
