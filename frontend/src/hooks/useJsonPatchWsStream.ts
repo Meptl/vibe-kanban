@@ -185,6 +185,14 @@ export const useJsonPatchWsStream = <T extends object>(
         setIsConnected(false);
         wsRef.current = null;
 
+        // Server explicitly signaled stream completion.
+        // This should be terminal even for non-terminal streams.
+        if (evt?.reason === 'finished') {
+          finishedRef.current = true;
+          setIsFinished(true);
+          return;
+        }
+
         // For terminal streams, clean closes are expected and should not reconnect.
         // For non-terminal streams, reconnect even after clean closes to stay live.
         if (
