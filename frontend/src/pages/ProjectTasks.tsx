@@ -29,6 +29,7 @@ import { useBranchStatus, useAttemptExecution } from '@/hooks';
 import { paths } from '@/lib/paths';
 import { isUnderlyingRepoNotDetectedError } from '@/lib/repositoryErrors';
 import { ExecutionProcessesProvider } from '@/contexts/ExecutionProcessesContext';
+import { DiffStreamProvider } from '@/contexts/DiffStreamContext';
 import { ClickedElementsProvider } from '@/contexts/ClickedElementsProvider';
 import { ReviewProvider } from '@/contexts/ReviewProvider';
 import {
@@ -1275,16 +1276,18 @@ export function ProjectTasks() {
     <GitOperationsProvider attemptId={attempt?.id}>
       <ClickedElementsProvider attempt={attempt}>
         <ReviewProvider attemptId={attempt?.id}>
-          <ExecutionProcessesProvider attemptId={attempt?.id}>
-            <TasksLayout
-              kanban={kanbanContent}
-              attempt={attemptContent}
-              aux={auxContent}
-              isPanelOpen={isPanelOpen}
-              mode={effectiveMode}
-              rightHeader={rightHeader}
-            />
-          </ExecutionProcessesProvider>
+          <DiffStreamProvider attemptId={attempt?.id}>
+            <ExecutionProcessesProvider attemptId={attempt?.id}>
+              <TasksLayout
+                kanban={kanbanContent}
+                attempt={attemptContent}
+                aux={auxContent}
+                isPanelOpen={isPanelOpen}
+                mode={effectiveMode}
+                rightHeader={rightHeader}
+              />
+            </ExecutionProcessesProvider>
+          </DiffStreamProvider>
         </ReviewProvider>
       </ClickedElementsProvider>
     </GitOperationsProvider>

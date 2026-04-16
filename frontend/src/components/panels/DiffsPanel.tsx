@@ -1,4 +1,5 @@
 import { useDiffStream } from '@/hooks/useDiffStream';
+import { useDiffStreamContext } from '@/contexts/DiffStreamContext';
 import {
   useMemo,
   useCallback,
@@ -88,10 +89,12 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   const hasSeenDiffUpdateRef = useRef(false);
 
   // @lat: [[lazy-diff-loading#Metadata-First Diff Stream]]
-  const { diffs, isComplete, error } = useDiffStream(
+  const diffStreamContext = useDiffStreamContext();
+  const fallbackDiffStream = useDiffStream(
     selectedAttempt?.id ?? null,
-    true
+    !diffStreamContext
   );
+  const { diffs, isComplete, error } = diffStreamContext ?? fallbackDiffStream;
   const loading =
     !!selectedAttempt &&
     !hasCompletedFirstPageLoad &&

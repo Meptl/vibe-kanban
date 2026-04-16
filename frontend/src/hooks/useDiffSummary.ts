@@ -1,8 +1,11 @@
+import { useDiffStreamContext } from '@/contexts/DiffStreamContext';
 import { useDiffStream } from '@/hooks/useDiffStream';
 import { useMemo } from 'react';
 
 export function useDiffSummary(attemptId: string | null) {
-  const { diffs, error } = useDiffStream(attemptId, true);
+  const diffStreamContext = useDiffStreamContext();
+  const fallbackDiffStream = useDiffStream(attemptId, !diffStreamContext);
+  const { diffs, error } = diffStreamContext ?? fallbackDiffStream;
 
   const { fileCount, added, deleted } = useMemo(() => {
     if (!attemptId || diffs.length === 0) {
