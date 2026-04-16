@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { Diff, PatchType } from 'shared/types';
+import type { DiffMetadata, PatchType } from 'shared/types';
 import { useJsonPatchWsStream } from './useJsonPatchWsStream';
 
 interface DiffEntries {
@@ -11,7 +11,7 @@ type DiffStreamEvent = {
 };
 
 interface UseDiffStreamResult {
-  diffs: Diff[];
+  diffs: DiffMetadata[];
   isComplete: boolean;
   error: string | null;
 }
@@ -22,7 +22,7 @@ export const useDiffStream = (
 ): UseDiffStreamResult => {
   const endpoint = (() => {
     if (!attemptId) return undefined;
-    return `/api/task-attempts/${attemptId}/diff/ws`;
+    return `/api/task-attempts/${attemptId}/diff-metadata-ws`;
   })();
 
   const initialData = useCallback(
@@ -44,7 +44,7 @@ export const useDiffStream = (
 
   const diffs = useMemo(() => {
     return Object.values(data?.entries ?? {})
-      .filter((entry) => entry?.type === 'DIFF')
+      .filter((entry) => entry?.type === 'DIFF_METADATA')
       .map((entry) => entry.content);
   }, [data?.entries]);
 

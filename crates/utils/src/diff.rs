@@ -30,6 +30,47 @@ pub struct Diff {
     pub deletions: Option<usize>,
 }
 
+/// Metadata-only representation for diff streams.
+/// Intentionally excludes old/new file contents.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffMetadata {
+    pub change: DiffChangeKind,
+    pub old_path: Option<String>,
+    pub new_path: Option<String>,
+    /// True when file contents are intentionally omitted (e.g., too large)
+    pub content_omitted: bool,
+    /// Optional precomputed stats for omitted content
+    pub additions: Option<usize>,
+    pub deletions: Option<usize>,
+}
+
+impl From<Diff> for DiffMetadata {
+    fn from(value: Diff) -> Self {
+        Self {
+            change: value.change,
+            old_path: value.old_path,
+            new_path: value.new_path,
+            content_omitted: value.content_omitted,
+            additions: value.additions,
+            deletions: value.deletions,
+        }
+    }
+}
+
+impl From<&Diff> for DiffMetadata {
+    fn from(value: &Diff) -> Self {
+        Self {
+            change: value.change.clone(),
+            old_path: value.old_path.clone(),
+            new_path: value.new_path.clone(),
+            content_omitted: value.content_omitted,
+            additions: value.additions,
+            deletions: value.deletions,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "camelCase")]

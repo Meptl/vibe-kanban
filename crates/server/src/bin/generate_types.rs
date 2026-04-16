@@ -37,6 +37,7 @@ fn generate_types_content() -> String {
         utils::approvals::CreateApprovalRequest::decl(),
         utils::approvals::ApprovalResponse::decl(),
         utils::diff::Diff::decl(),
+        utils::diff::DiffMetadata::decl(),
         utils::diff::DiffChangeKind::decl(),
         utils::response::ApiResponse::<()>::decl(),
         server::routes::tags::TagSearchParams::decl(),

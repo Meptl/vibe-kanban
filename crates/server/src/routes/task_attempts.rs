@@ -555,14 +555,14 @@ pub async fn follow_up(
 }
 
 #[axum::debug_handler]
-pub async fn stream_task_attempt_diff_ws(
+pub async fn stream_task_attempt_diff_metadata_ws(
     ws: WebSocketUpgrade,
     Extension(task_attempt): Extension<TaskAttempt>,
     State(deployment): State<DeploymentImpl>,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| async move {
         if let Err(e) = handle_task_attempt_diff_ws(socket, deployment, task_attempt).await {
-            tracing::warn!("diff WS closed: {}", e);
+            tracing::warn!("diff metadata WS closed: {}", e);
         }
     })
 }
@@ -1341,7 +1341,10 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/commit-compare", get(compare_commit_to_head))
         .route("/start-dev-server", post(start_dev_server))
         .route("/branch-status", get(get_task_attempt_branch_status))
-        .route("/diff/ws", get(stream_task_attempt_diff_ws))
+        .route(
+            "/diff-metadata-ws",
+            get(stream_task_attempt_diff_metadata_ws),
+        )
         .route("/merge", post(merge_task_attempt))
         .route("/rebase", post(rebase_task_attempt))
         .route("/conflicts/abort", post(abort_conflicts_task_attempt))

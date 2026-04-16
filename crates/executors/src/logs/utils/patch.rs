@@ -4,7 +4,10 @@ use json_patch::Patch;
 use serde::{Deserialize, Serialize};
 use serde_json::{from_value, json, to_value};
 use ts_rs::TS;
-use workspace_utils::{diff::Diff, msg_store::MsgStore};
+use workspace_utils::{
+    diff::{Diff, DiffMetadata},
+    msg_store::MsgStore,
+};
 
 use crate::logs::{NormalizedEntry, utils::EntryIndexProvider};
 
@@ -23,7 +26,7 @@ pub enum PatchType {
     NormalizedEntry(NormalizedEntry),
     Stdout(String),
     Stderr(String),
-    Diff(Diff),
+    DiffMetadata(DiffMetadata),
 }
 
 #[derive(Serialize)]
@@ -79,7 +82,7 @@ impl ConversationPatch {
         let patch_entry = PatchEntry {
             op: PatchOperation::Add,
             path: format!("/entries/{entry_index}"),
-            value: PatchType::Diff(diff),
+            value: PatchType::DiffMetadata(diff.into()),
         };
 
         from_value(json!([patch_entry])).unwrap()
@@ -90,7 +93,7 @@ impl ConversationPatch {
         let patch_entry = PatchEntry {
             op: PatchOperation::Replace,
             path: format!("/entries/{entry_index}"),
-            value: PatchType::Diff(diff),
+            value: PatchType::DiffMetadata(diff.into()),
         };
 
         from_value(json!([patch_entry])).unwrap()

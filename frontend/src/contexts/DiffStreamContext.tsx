@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import type { Diff } from 'shared/types';
+import type { DiffMetadata } from 'shared/types';
 import { useDiffStream } from '@/hooks/useDiffStream';
 
 type DiffStreamContextValue = {
   attemptId: string | null;
-  diffs: Diff[];
+  diffs: DiffMetadata[];
   isComplete: boolean;
   error: string | null;
 };

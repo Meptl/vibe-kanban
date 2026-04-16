@@ -22,7 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { TaskAttempt, Diff } from 'shared/types';
+import type { TaskAttempt, Diff, DiffMetadata } from 'shared/types';
 import type { DraftReviewCommentData } from 'shared/types';
 import { attemptsApi, draftApi } from '@/lib/api';
 import { SplitSide } from '@git-diff-view/react';
@@ -54,18 +54,26 @@ function deserializeSplitSide(side: string): SplitSide {
   return side === 'old' ? SplitSide.old : SplitSide.new;
 }
 
-function getDiffFilePath(diff: Diff): string {
+function getDiffFilePath(diff: DiffMetadata): string {
   return diff.newPath || diff.oldPath || 'unknown';
 }
 
-function isLargeDiffFile(diff: Diff): boolean {
+function isLargeDiffFile(diff: DiffMetadata): boolean {
   const additions = diff.additions ?? 0;
   const deletions = diff.deletions ?? 0;
   return additions + deletions > LARGE_FILE_CHANGE_COLLAPSE_THRESHOLD;
 }
 
-function getDiffId(diff: Diff, idx: number): string {
+function getDiffId(diff: DiffMetadata, idx: number): string {
   return diff.newPath || diff.oldPath || String(idx);
+}
+
+function metadataToDisplayDiff(metadata: DiffMetadata): Diff {
+  return {
+    ...metadata,
+    oldContent: null,
+    newContent: null,
+  };
 }
 
 export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
@@ -94,24 +102,25 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     selectedAttempt?.id ?? null,
     !diffStreamContext
   );
-  const { diffs, isComplete, error } = diffStreamContext ?? fallbackDiffStream;
+  const { diffs: metadataDiffs, isComplete, error } =
+    diffStreamContext ?? fallbackDiffStream;
   const loading =
     !!selectedAttempt &&
     !hasCompletedFirstPageLoad &&
     !error &&
     !isComplete &&
-    diffs.length === 0;
+    metadataDiffs.length === 0;
 
   const mergedDiffs = useMemo(() => {
-    return diffs.map((diff, idx) => {
+    return metadataDiffs.map((diff, idx) => {
       const id = getDiffId(diff, idx);
       const loaded = loadedDiffs[id];
       if (!loaded) {
-        return diff;
+        return metadataToDisplayDiff(diff);
       }
       return loaded.diff;
     });
-  }, [diffs, loadedDiffs]);
+  }, [metadataDiffs, loadedDiffs]);
 
   const { fileCount, added, deleted } = useMemo(() => {
     if (mergedDiffs.length === 0) {
@@ -140,10 +149,13 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   }, [selectedAttempt?.id]);
 
   useEffect(() => {
-    if (!hasCompletedFirstPageLoad && (isComplete || !!error || diffs.length > 0)) {
+    if (
+      !hasCompletedFirstPageLoad &&
+      (isComplete || !!error || metadataDiffs.length > 0)
+    ) {
       setHasCompletedFirstPageLoad(true);
     }
-  }, [diffs.length, error, hasCompletedFirstPageLoad, isComplete]);
+  }, [metadataDiffs.length, error, hasCompletedFirstPageLoad, isComplete]);
 
   useEffect(() => {
     if (!hasSeenDiffUpdateRef.current) {
@@ -156,7 +168,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
     setLoadedDiffs({});
     setLoadingIds(new Set());
     setProcessedStatsIds(new Set());
-  }, [diffs]);
+  }, [metadataDiffs]);
 
   useEffect(() => {
     const attemptId = selectedAttempt?.id;
@@ -285,14 +297,19 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
   }, [selectedAttempt?.id, comments, draftsByFile]);
 
   useEffect(() => {
-    if (!isComplete || diffs.length === 0 || hasInitialized || hasUserAdjustedCollapse)
+    if (
+      !isComplete ||
+      metadataDiffs.length === 0 ||
+      hasInitialized ||
+      hasUserAdjustedCollapse
+    )
       return;
 
     const initial =
-      diffs.length > COLLAPSE_ALL_DEFAULT_THRESHOLD
-        ? new Set(diffs.map((d, i) => getDiffId(d, i)))
+      metadataDiffs.length > COLLAPSE_ALL_DEFAULT_THRESHOLD
+        ? new Set(metadataDiffs.map((d, i) => getDiffId(d, i)))
         : new Set(
-            diffs
+            metadataDiffs
               .filter(
                 (d) =>
                   DEFAULT_COLLAPSED_CHANGES.has(d.change) ||
@@ -306,10 +323,12 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       setCollapsedIds(initial);
     }
     setHasInitialized(true);
-  }, [diffs, hasInitialized, hasUserAdjustedCollapse, isComplete]);
+  }, [metadataDiffs, hasInitialized, hasUserAdjustedCollapse, isComplete]);
 
   useEffect(() => {
-    const validIds = new Set(diffs.map((diff, idx) => getDiffId(diff, idx)));
+    const validIds = new Set(
+      metadataDiffs.map((diff, idx) => getDiffId(diff, idx))
+    );
     setLoadedDiffs((prev) => {
       const next: Record<string, LoadedDiffRecord> = {};
       for (const [id, loaded] of Object.entries(prev)) {
@@ -320,10 +339,12 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       }
       return next;
     });
-  }, [diffs]);
+  }, [metadataDiffs]);
 
   useEffect(() => {
-    const validIds = new Set(diffs.map((diff, idx) => getDiffId(diff, idx)));
+    const validIds = new Set(
+      metadataDiffs.map((diff, idx) => getDiffId(diff, idx))
+    );
     setProcessedStatsIds((prev) => {
       const next = new Set<string>();
       prev.forEach((id) => {
@@ -331,7 +352,7 @@ export function DiffsPanel({ selectedAttempt }: DiffsPanelProps) {
       });
       return next;
     });
-  }, [diffs]);
+  }, [metadataDiffs]);
 
   const ids = useMemo(() => {
     return mergedDiffs.map((d, i) => getDiffId(d, i));

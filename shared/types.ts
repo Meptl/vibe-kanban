@@ -80,6 +80,16 @@ contentOmitted: boolean,
  */
 additions: number | null, deletions: number | null, };
 
+export type DiffMetadata = { change: DiffChangeKind, oldPath: string | null, newPath: string | null, 
+/**
+ * True when file contents are intentionally omitted (e.g., too large)
+ */
+contentOmitted: boolean, 
+/**
+ * Optional precomputed stats for omitted content
+ */
+additions: number | null, deletions: number | null, };
+
 export type DiffChangeKind = "added" | "deleted" | "modified" | "renamed" | "copied" | "permissionChange";
 
 export type ApiResponse<T, E = T> = { success: boolean, data: T | null, error_data: E | null, message: string | null, };
@@ -322,6 +332,6 @@ export type ToolResultValueType = { "type": "markdown" } | { "type": "json" };
 
 export type ToolStatus = { "status": "created" } | { "status": "success" } | { "status": "failed" } | { "status": "denied", reason: string | null, } | { "status": "pending_approval", approval_id: string, requested_at: string, timeout_at: string, } | { "status": "timed_out" };
 
-export type PatchType = { "type": "NORMALIZED_ENTRY", "content": NormalizedEntry } | { "type": "STDOUT", "content": string } | { "type": "STDERR", "content": string } | { "type": "DIFF", "content": Diff };
+export type PatchType = { "type": "NORMALIZED_ENTRY", "content": NormalizedEntry } | { "type": "STDOUT", "content": string } | { "type": "STDERR", "content": string } | { "type": "DIFF_METADATA", "content": DiffMetadata };
 
 export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
