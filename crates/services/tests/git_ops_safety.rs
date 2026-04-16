@@ -1017,6 +1017,60 @@ fn rebase_applies_multiple_commits_onto_ahead_base() {
 }
 
 #[test]
+fn rebase_preserves_feature_after_main_reset_of_prior_merge() {
+    let td = TempDir::new().unwrap();
+    let repo_path = td.path().join("repo_remerge_reset");
+    let worktree_path = td.path().join("wt_feature_remerge_reset");
+    let service = GitService::new();
+    service.initialize_repo_with_main_branch(&repo_path).unwrap();
+
+    let repo = Repository::open(&repo_path).unwrap();
+    configure_user(&repo);
+    checkout_branch(&repo, "main");
+    write_file(&repo_path, "base.txt", "base\n");
+    commit_all(&repo, "base commit");
+    let base_before_merge = service.get_branch_oid(&repo_path, "main").unwrap();
+
+    create_branch_from_head(&repo, "feature");
+    service
+        .add_worktree(&repo_path, &worktree_path, "feature", false)
+        .unwrap();
+    write_file(&worktree_path, "feature.txt", "feature change\n");
+    let wt_repo = Repository::open(&worktree_path).unwrap();
+    commit_all(&wt_repo, "feature commit");
+
+    let merge_sha = service
+        .merge_changes(&repo_path, &worktree_path, "feature", "main", "merge feature")
+        .unwrap();
+    assert_eq!(service.get_branch_oid(&repo_path, "main").unwrap(), merge_sha);
+    assert_eq!(service.get_branch_oid(&repo_path, "feature").unwrap(), merge_sha);
+
+    let git = GitCli::new();
+    checkout_branch(&repo, "main");
+    git.git(&repo_path, ["reset", "--hard", &base_before_merge])
+        .unwrap();
+    write_file(&repo_path, "other_task.txt", "other task change\n");
+    commit_all(&repo, "other task commit");
+
+    service
+        .rebase_branch(&repo_path, &worktree_path, "main", "main", "feature", None)
+        .expect("rebase should preserve unique feature commit after reset");
+
+    let (ahead, behind) = service
+        .get_branch_status(&repo_path, "feature", "main")
+        .unwrap();
+    assert_eq!(behind, 0, "feature should not be behind main after rebase");
+    assert!(
+        ahead > 0,
+        "feature should remain ahead with re-applicable changes after rebase"
+    );
+    assert_eq!(
+        fs::read_to_string(worktree_path.join("feature.txt")).unwrap(),
+        "feature change\n"
+    );
+}
+
+#[test]
 fn merge_when_base_ahead_and_feature_ahead_fails() {
     let td = TempDir::new().unwrap();
     let (repo_path, worktree_path) = setup_repo_with_worktree(&td);

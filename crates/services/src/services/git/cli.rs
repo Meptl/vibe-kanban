@@ -567,12 +567,13 @@ impl GitCli {
         }
     }
 
-    /// Return the merge base commit sha of two refs in the given worktree.
-    /// If `git merge-base --fork-point` fails, falls back to regular `merge-base`.
+    /// Return the graph merge-base commit sha of two refs in the given worktree.
+    ///
+    /// Intentionally avoid `--fork-point` here: after force-push/reset workflows,
+    /// reflog-based fork-point can resolve to the feature tip and cause rebase to
+    /// replay zero commits (effectively dropping task changes).
     fn merge_base(&self, worktree_path: &Path, a: &str, b: &str) -> Result<String, GitCliError> {
-        let out = self
-            .git(worktree_path, ["merge-base", "--fork-point", a, b])
-            .unwrap_or(self.git(worktree_path, ["merge-base", a, b])?);
+        let out = self.git(worktree_path, ["merge-base", a, b])?;
         Ok(out.trim().to_string())
     }
 
