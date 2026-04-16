@@ -117,7 +117,7 @@ export function NoServerContent({
     <div className="flex-1 flex items-center justify-center">
       <div
         className={`text-center space-y-6 mx-auto p-6 ${
-          isEditingExistingScript ? 'max-w-[56rem] w-full' : 'max-w-md'
+          isEditingExistingScript ? 'max-w-2xl w-full' : 'max-w-md'
         }`}
       >
         <div className="flex items-center justify-center">
