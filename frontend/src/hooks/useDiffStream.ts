@@ -20,10 +20,35 @@ type DiffMetadataWsMessage =
   | {
       type: 'remove';
       path: string;
-    }
-  | {
-      type: 'finished';
     };
+
+function diffMetadataEqual(a: DiffMetadata, b: DiffMetadata): boolean {
+  return (
+    a.change === b.change &&
+    a.oldPath === b.oldPath &&
+    a.newPath === b.newPath &&
+    a.contentOmitted === b.contentOmitted &&
+    a.additions === b.additions &&
+    a.deletions === b.deletions
+  );
+}
+
+function entryMapEqual(
+  a: Record<string, DiffMetadata>,
+  b: Record<string, DiffMetadata>
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    const aValue = a[key];
+    const bValue = b[key];
+    if (!bValue || !diffMetadataEqual(aValue, bValue)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export const useDiffStream = (
   attemptId: string | null,
@@ -70,7 +95,6 @@ export const useDiffStream = (
           window.location.host
         }${httpEndpoint}`;
     const ws = new WebSocket(wsEndpoint);
-    let sawFinished = false;
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -86,14 +110,21 @@ export const useDiffStream = (
       try {
         const msg: DiffMetadataWsMessage = JSON.parse(event.data);
         if (msg.type === 'snapshot') {
-          setEntries(msg.entries);
+          setEntries((prev) => (entryMapEqual(prev, msg.entries) ? prev : msg.entries));
+          setIsFinished(true);
           return;
         }
         if (msg.type === 'upsert') {
-          setEntries((prev) => ({
-            ...prev,
-            [msg.path]: msg.diff,
-          }));
+          setEntries((prev) => {
+            const existing = prev[msg.path];
+            if (existing && diffMetadataEqual(existing, msg.diff)) {
+              return prev;
+            }
+            return {
+              ...prev,
+              [msg.path]: msg.diff,
+            };
+          });
           return;
         }
         if (msg.type === 'remove') {
@@ -105,12 +136,6 @@ export const useDiffStream = (
           });
           return;
         }
-        if (msg.type === 'finished') {
-          setIsFinished(true);
-          sawFinished = true;
-          ws.close(1000, 'finished');
-          wsRef.current = null;
-        }
       } catch (err) {
         console.error('Failed to process diff metadata message:', err);
         setError('Failed to process stream update');
@@ -121,11 +146,8 @@ export const useDiffStream = (
       setError('Connection failed');
     };
 
-    ws.onclose = (evt) => {
+    ws.onclose = () => {
       wsRef.current = null;
-      if (sawFinished || evt?.reason === 'finished') {
-        return;
-      }
       retryAttemptsRef.current += 1;
       const delay = Math.min(8000, 1000 * Math.pow(2, retryAttemptsRef.current));
       retryTimerRef.current = window.setTimeout(() => {

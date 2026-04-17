@@ -2,7 +2,10 @@ pub mod drafts;
 pub mod images;
 pub mod queue;
 pub mod util;
-use std::time::Instant;
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 use axum::{
     Extension, Json, Router,
@@ -36,7 +39,7 @@ use local_deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use services::services::{
-    container::ContainerService,
+    container::{ContainerService, DiffStreamMode},
     git::{ConflictOp, DiffDetailLevel, DiffTarget, GitService, WorktreeResetOptions},
 };
 use sqlx::Error as SqlxError;
@@ -226,11 +229,13 @@ pub async fn get_task_attempt_diff(
     };
 
     let built = build_patch_from_diffs(diffs);
-    Ok(ResponseJson(ApiResponse::success(json!(TaskAttemptDiffResponse {
-        attempt_id: task_attempt.id,
-        patch: built.patch,
-        omitted_files: built.omitted_files,
-    }))))
+    Ok(ResponseJson(ApiResponse::success(json!(
+        TaskAttemptDiffResponse {
+            attempt_id: task_attempt.id,
+            patch: built.patch,
+            omitted_files: built.omitted_files,
+        }
+    ))))
 }
 
 async fn get_task_attempt_diff_for_file(
@@ -574,10 +579,16 @@ pub async fn stream_task_attempt_diff_metadata_ws(
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum DiffMetadataWsMessage {
-    Snapshot { entries: std::collections::HashMap<String, DiffMetadata> },
-    Upsert { path: String, diff: DiffMetadata },
-    Remove { path: String },
-    Finished,
+    Snapshot {
+        entries: std::collections::HashMap<String, DiffMetadata>,
+    },
+    Upsert {
+        path: String,
+        diff: DiffMetadata,
+    },
+    Remove {
+        path: String,
+    },
 }
 
 enum DiffMetadataPatchEvent {
@@ -641,6 +652,45 @@ fn parse_diff_metadata_patch_events(patch: &Value) -> Vec<DiffMetadataPatchEvent
     events
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiffWsSessionMode {
+    Idle,
+    Live,
+}
+
+fn diff_metadata_eq(a: &DiffMetadata, b: &DiffMetadata) -> bool {
+    std::mem::discriminant(&a.change) == std::mem::discriminant(&b.change)
+        && a.old_path == b.old_path
+        && a.new_path == b.new_path
+        && a.content_omitted == b.content_omitted
+        && a.additions == b.additions
+        && a.deletions == b.deletions
+}
+
+fn apply_diff_metadata_event(
+    entries: &mut std::collections::HashMap<String, DiffMetadata>,
+    event: DiffMetadataPatchEvent,
+) -> Option<DiffMetadataWsMessage> {
+    match event {
+        DiffMetadataPatchEvent::Upsert { path, diff } => {
+            if entries
+                .get(&path)
+                .is_some_and(|existing| diff_metadata_eq(existing, &diff))
+            {
+                return None;
+            }
+            entries.insert(path.clone(), diff.clone());
+            Some(DiffMetadataWsMessage::Upsert { path, diff })
+        }
+        DiffMetadataPatchEvent::Remove { path } => {
+            if entries.remove(&path).is_none() {
+                return None;
+            }
+            Some(DiffMetadataWsMessage::Remove { path })
+        }
+    }
+}
+
 async fn send_diff_ws_message(
     sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
     message: DiffMetadataWsMessage,
@@ -657,99 +707,216 @@ async fn handle_task_attempt_diff_ws(
     deployment: DeploymentImpl,
     task_attempt: TaskAttempt,
 ) -> anyhow::Result<()> {
-    use futures_util::{SinkExt, StreamExt};
+    use futures_util::{SinkExt, StreamExt, stream::BoxStream};
     use utils::log_msg::LogMsg;
 
-    let stream = deployment.container().stream_diff(&task_attempt).await?;
+    async fn refresh_task_attempt(
+        deployment: &DeploymentImpl,
+        fallback: &TaskAttempt,
+    ) -> anyhow::Result<TaskAttempt> {
+        Ok(TaskAttempt::find_by_id(&deployment.db().pool, fallback.id)
+            .await?
+            .unwrap_or_else(|| fallback.clone()))
+    }
 
-    let mut stream = stream;
+    async fn has_relevant_running_execution_process(
+        deployment: &DeploymentImpl,
+        task_attempt_id: Uuid,
+    ) -> anyhow::Result<bool> {
+        let processes = ExecutionProcess::find_by_task_attempt_id(
+            &deployment.db().pool,
+            task_attempt_id,
+            false,
+        )
+        .await?;
+        Ok(processes.into_iter().any(|process| {
+            process.status == ExecutionProcessStatus::Running
+                && !matches!(process.run_reason, ExecutionProcessRunReason::DevServer)
+        }))
+    }
+
+    fn has_available_worktree(attempt: &TaskAttempt) -> bool {
+        let Some(container_ref) = attempt.container_ref.as_ref() else {
+            return false;
+        };
+        !attempt.worktree_deleted && Path::new(container_ref).exists()
+    }
+
+    async fn should_enter_live_mode(
+        deployment: &DeploymentImpl,
+        fallback: &TaskAttempt,
+    ) -> anyhow::Result<Option<TaskAttempt>> {
+        if !has_relevant_running_execution_process(deployment, fallback.id).await? {
+            return Ok(None);
+        }
+        let current_attempt = refresh_task_attempt(deployment, fallback).await?;
+        if has_available_worktree(&current_attempt) {
+            Ok(Some(current_attempt))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn load_initial_snapshot_entries(
+        deployment: &DeploymentImpl,
+        task_attempt: &TaskAttempt,
+    ) -> anyhow::Result<std::collections::HashMap<String, DiffMetadata>> {
+        let stream = deployment
+            .container()
+            .stream_diff(task_attempt, DiffStreamMode::Snapshot)
+            .await?;
+        let mut stream = stream;
+        let mut entries = std::collections::HashMap::new();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(LogMsg::JsonPatch(patch)) => {
+                    let patch_value = serde_json::to_value(&patch).unwrap_or(Value::Null);
+                    for event in parse_diff_metadata_patch_events(&patch_value) {
+                        match event {
+                            DiffMetadataPatchEvent::Upsert { path, diff } => {
+                                entries.insert(path, diff);
+                            }
+                            DiffMetadataPatchEvent::Remove { path } => {
+                                entries.remove(&path);
+                            }
+                        }
+                    }
+                }
+                Ok(LogMsg::Finished) => break,
+                Ok(_) => {}
+                Err(err) => return Err(err.into()),
+            }
+        }
+        Ok(entries)
+    }
+
+    async fn start_live_stream(
+        deployment: &DeploymentImpl,
+        task_attempt: &TaskAttempt,
+    ) -> anyhow::Result<BoxStream<'static, Result<LogMsg, std::io::Error>>> {
+        deployment
+            .container()
+            .stream_diff(task_attempt, DiffStreamMode::Live)
+            .await
+            .map_err(Into::into)
+    }
+
+    let current_attempt = refresh_task_attempt(&deployment, &task_attempt).await?;
+    let mut entries = load_initial_snapshot_entries(&deployment, &current_attempt).await?;
 
     let (mut sender, mut receiver) = socket.split();
-    let mut initial_snapshot_complete = false;
-    let mut initial_entries: std::collections::HashMap<String, DiffMetadata> =
-        std::collections::HashMap::new();
+    send_diff_ws_message(
+        &mut sender,
+        DiffMetadataWsMessage::Snapshot {
+            entries: entries.clone(),
+        },
+    )
+    .await?;
+
+    let mut mode = DiffWsSessionMode::Idle;
+    let mut live_stream: Option<BoxStream<'static, Result<LogMsg, std::io::Error>>> = None;
+
+    if let Some(live_attempt) = should_enter_live_mode(&deployment, &task_attempt).await? {
+        match start_live_stream(&deployment, &live_attempt).await {
+            Ok(stream) => {
+                mode = DiffWsSessionMode::Live;
+                live_stream = Some(stream);
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "failed to start initial live diff stream for attempt {}: {}",
+                    task_attempt.id,
+                    err
+                );
+            }
+        }
+    }
+
+    let mut lifecycle_poll = tokio::time::interval(Duration::from_secs(1));
+    lifecycle_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     loop {
-        tokio::select! {
-            // Wait for next stream item
-            item = stream.next() => {
-                match item {
-                    Some(Ok(LogMsg::JsonPatch(patch))) => {
-                        let patch_value = serde_json::to_value(&patch).unwrap_or(Value::Null);
-                        let events = parse_diff_metadata_patch_events(&patch_value);
-                        if initial_snapshot_complete {
-                            for event in events {
-                                let out_msg = match event {
-                                    DiffMetadataPatchEvent::Upsert { path, diff } => {
-                                        DiffMetadataWsMessage::Upsert { path, diff }
-                                    }
-                                    DiffMetadataPatchEvent::Remove { path } => {
-                                        DiffMetadataWsMessage::Remove { path }
-                                    }
-                                };
-                                if send_diff_ws_message(&mut sender, out_msg).await.is_err() {
-                                    break;
+        match mode {
+            DiffWsSessionMode::Idle => {
+                tokio::select! {
+                    msg = receiver.next() => {
+                        match msg {
+                            None => break,
+                            Some(Ok(Message::Close(_))) => break,
+                            Some(_) => {}
+                        };
+                    }
+                    _ = lifecycle_poll.tick() => {
+                        if let Some(live_attempt) = should_enter_live_mode(&deployment, &task_attempt).await? {
+                            match start_live_stream(&deployment, &live_attempt).await {
+                                Ok(stream) => {
+                                    mode = DiffWsSessionMode::Live;
+                                    live_stream = Some(stream);
                                 }
-                            }
-                        } else {
-                            for event in events {
-                                match event {
-                                    DiffMetadataPatchEvent::Upsert { path, diff } => {
-                                        initial_entries.insert(path, diff);
-                                    }
-                                    DiffMetadataPatchEvent::Remove { path } => {
-                                        initial_entries.remove(&path);
-                                    }
+                                Err(err) => {
+                                    tracing::warn!(
+                                        "failed to start live diff stream for attempt {}: {}",
+                                        task_attempt.id,
+                                        err
+                                    );
                                 }
                             }
                         }
-                    }
-                    Some(Ok(LogMsg::Finished)) => {
-                        if !initial_snapshot_complete {
-                            initial_snapshot_complete = true;
-                            if send_diff_ws_message(
-                                &mut sender,
-                                DiffMetadataWsMessage::Snapshot {
-                                    entries: std::mem::take(&mut initial_entries),
-                                },
-                            )
-                            .await
-                            .is_err()
-                            {
-                                break;
-                            }
-                        }
-                        if send_diff_ws_message(&mut sender, DiffMetadataWsMessage::Finished)
-                            .await
-                            .is_err()
-                        {
-                            break;
-                        }
-                    }
-                    Some(Ok(_)) => {}
-                    Some(Err(e)) => {
-                        tracing::error!("stream error: {}", e);
-                        break;
-                    }
-                    None => {
-                        let _ = sender
-                            .send(Message::Close(Some(CloseFrame {
-                                code: close_code::NORMAL,
-                                reason: "finished".into(),
-                            })))
-                            .await;
-                        break;
                     }
                 }
             }
-            // Detect client disconnection
-            msg = receiver.next() => {
-                if msg.is_none() {
-                    break;
+            DiffWsSessionMode::Live => {
+                let stream = live_stream
+                    .as_mut()
+                    .ok_or_else(|| anyhow::anyhow!("live mode without stream"))?;
+                tokio::select! {
+                    msg = receiver.next() => {
+                        match msg {
+                            None => break,
+                            Some(Ok(Message::Close(_))) => break,
+                            Some(_) => {}
+                        };
+                    }
+                    _ = lifecycle_poll.tick() => {
+                        if should_enter_live_mode(&deployment, &task_attempt).await?.is_none() {
+                            live_stream = None;
+                            mode = DiffWsSessionMode::Idle;
+                        }
+                    }
+                    item = stream.next() => {
+                        match item {
+                            Some(Ok(LogMsg::JsonPatch(patch))) => {
+                                let patch_value = serde_json::to_value(&patch).unwrap_or(Value::Null);
+                                for event in parse_diff_metadata_patch_events(&patch_value) {
+                                    if let Some(out_msg) = apply_diff_metadata_event(&mut entries, event) {
+                                        send_diff_ws_message(&mut sender, out_msg).await?;
+                                    }
+                                }
+                            }
+                            Some(Ok(LogMsg::Finished)) => {}
+                            Some(Ok(_)) => {}
+                            Some(Err(err)) => {
+                                tracing::error!("live diff stream error for attempt {}: {}", task_attempt.id, err);
+                                live_stream = None;
+                                mode = DiffWsSessionMode::Idle;
+                            }
+                            None => {
+                                live_stream = None;
+                                mode = DiffWsSessionMode::Idle;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+
+    let _ = sender
+        .send(Message::Close(Some(CloseFrame {
+            code: close_code::NORMAL,
+            reason: "client_disconnect".into(),
+        })))
+        .await;
     Ok(())
 }
 

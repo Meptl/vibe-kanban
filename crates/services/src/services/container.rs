@@ -68,6 +68,12 @@ pub enum ContainerError {
     Other(#[from] AnyhowError), // Catches any unclassified errors
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffStreamMode {
+    Snapshot,
+    Live,
+}
+
 #[async_trait]
 pub trait ContainerService {
     fn msg_stores(&self) -> &Arc<RwLock<HashMap<Uuid, Arc<MsgStore>>>>;
@@ -385,6 +391,7 @@ pub trait ContainerService {
     async fn stream_diff(
         &self,
         task_attempt: &TaskAttempt,
+        mode: DiffStreamMode,
     ) -> Result<futures::stream::BoxStream<'static, Result<LogMsg, std::io::Error>>, ContainerError>;
 
     /// Fetch the MsgStore for a given execution ID, panicking if missing.

@@ -47,7 +47,7 @@ use nix::unistd::{Pid, getpgid};
 use services::services::{
     approvals::{Approvals, executor_approvals::ExecutorApprovalBridge},
     config::Config,
-    container::{ContainerError, ContainerRef, ContainerService},
+    container::{ContainerError, ContainerRef, ContainerService, DiffStreamMode},
     diff_stream::{self, DiffStreamHandle},
     git::{Commit, DiffDetailLevel, DiffTarget, GitService},
     image::ImageService,
@@ -760,6 +760,41 @@ impl LocalContainerService {
         .map_err(|e| ContainerError::Other(anyhow!("{e}")))
     }
 
+    fn create_worktree_snapshot_diff_stream(
+        &self,
+        worktree_path: &Path,
+        base_commit: &Commit,
+    ) -> Result<DiffStreamHandle, ContainerError> {
+        let diffs = self.git().get_diffs(
+            DiffTarget::Worktree {
+                worktree_path,
+                base_commit,
+            },
+            None,
+            DiffDetailLevel::MetadataOnly,
+        )?;
+
+        let diffs: Vec<_> = diffs.into_iter().collect();
+        let stream = futures::stream::iter(diffs.into_iter().map(|diff| {
+            let entry_index = GitService::diff_path(&diff);
+            let patch =
+                ConversationPatch::add_diff(escape_json_pointer_segment(&entry_index), diff);
+            Ok::<_, std::io::Error>(LogMsg::JsonPatch(patch))
+        }))
+        .chain(futures::stream::once(async {
+            Ok::<_, std::io::Error>(LogMsg::Finished)
+        }))
+        .boxed();
+
+        Ok(diff_stream::DiffStreamHandle::new(stream, None))
+    }
+
+    fn create_empty_diff_stream(&self) -> DiffStreamHandle {
+        let stream =
+            futures::stream::once(async { Ok::<_, std::io::Error>(LogMsg::Finished) }).boxed();
+        diff_stream::DiffStreamHandle::new(stream, None)
+    }
+
     /// Extract the last assistant message from the MsgStore history
     fn extract_last_assistant_message(&self, exec_id: &Uuid) -> Option<String> {
         // Get the MsgStore for this execution
@@ -1289,6 +1324,7 @@ impl ContainerService for LocalContainerService {
     async fn stream_diff(
         &self,
         task_attempt: &TaskAttempt,
+        mode: DiffStreamMode,
     ) -> Result<futures::stream::BoxStream<'static, Result<LogMsg, std::io::Error>>, ContainerError>
     {
         let project_repo_path = self.get_project_repo_path(task_attempt).await?;
@@ -1308,23 +1344,60 @@ impl ContainerService for LocalContainerService {
         if let Some(merge) = &latest_merge
             && self.is_container_clean(task_attempt).await?
             && !is_ahead
+            && mode == DiffStreamMode::Snapshot
         {
             let commit = merge.merge_commit();
             let wrapper = self.create_merged_diff_stream(&project_repo_path, &commit)?;
             return Ok(Box::pin(wrapper));
         }
 
-        let container_ref = self.ensure_container_exists(task_attempt).await?;
+        let Some(container_ref) = task_attempt.container_ref.as_ref() else {
+            if mode == DiffStreamMode::Snapshot {
+                return Ok(Box::pin(self.create_empty_diff_stream()));
+            }
+            return Err(ContainerError::Other(anyhow!(
+                "Task attempt has no worktree path for live diff stream"
+            )));
+        };
+
+        if task_attempt.worktree_deleted {
+            if mode == DiffStreamMode::Snapshot {
+                return Ok(Box::pin(self.create_empty_diff_stream()));
+            }
+            return Err(ContainerError::Other(anyhow!(
+                "Task attempt worktree is marked deleted"
+            )));
+        }
+
         let worktree_path = PathBuf::from(container_ref);
+        if !worktree_path.exists() {
+            if mode == DiffStreamMode::Snapshot {
+                return Ok(Box::pin(self.create_empty_diff_stream()));
+            }
+            return Err(ContainerError::Other(anyhow!(
+                "Task attempt worktree path does not exist"
+            )));
+        }
+
         let base_commit = self.git().get_base_commit(
             &project_repo_path,
             &task_attempt.branch,
             &task_attempt.target_branch,
         )?;
 
-        let wrapper = self
-            .create_live_diff_stream(&worktree_path, &base_commit, &task_attempt.target_branch)
-            .await?;
+        let wrapper = match mode {
+            DiffStreamMode::Snapshot => {
+                self.create_worktree_snapshot_diff_stream(&worktree_path, &base_commit)?
+            }
+            DiffStreamMode::Live => {
+                self.create_live_diff_stream(
+                    &worktree_path,
+                    &base_commit,
+                    &task_attempt.target_branch,
+                )
+                .await?
+            }
+        };
         Ok(Box::pin(wrapper))
     }
 
