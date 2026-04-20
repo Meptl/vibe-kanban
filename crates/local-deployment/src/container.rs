@@ -55,7 +55,7 @@ use services::services::{
     queued_message::QueuedMessageService,
     worktree_manager::{WorktreeCleanup, WorktreeManager},
 };
-use tokio::{sync::RwLock, task::JoinHandle};
+use tokio::{sync::RwLock, task::JoinHandle, time::Instant};
 use tokio_util::io::ReaderStream;
 use utils::{
     log_msg::LogMsg,
@@ -67,11 +67,20 @@ use uuid::Uuid;
 
 use crate::{DeploymentError, command, copy};
 
+const SETUP_SUBPROCESS_RETENTION_SECS: u64 = 15 * 60;
+const SETUP_SUBPROCESS_TIMEOUT_SWEEP_INTERVAL_SECS: u64 = 60;
+
+#[derive(Debug, Clone)]
+struct SetupProcessGroupTracker {
+    pgids: HashSet<i32>,
+    tracked_at: Instant,
+}
+
 #[derive(Clone)]
 pub struct LocalContainerService {
     db: DBService,
     child_store: Arc<RwLock<HashMap<Uuid, Arc<RwLock<AsyncGroupChild>>>>>,
-    setup_script_process_groups: Arc<RwLock<HashMap<Uuid, HashSet<i32>>>>,
+    setup_script_process_groups: Arc<RwLock<HashMap<Uuid, SetupProcessGroupTracker>>>,
     interrupt_senders: Arc<RwLock<HashMap<Uuid, InterruptSender>>>,
     msg_stores: Arc<RwLock<HashMap<Uuid, Arc<MsgStore>>>>,
     config: Arc<RwLock<Config>>,
@@ -113,6 +122,7 @@ impl LocalContainerService {
         };
 
         container.spawn_worktree_cleanup();
+        container.spawn_setup_script_timeout_cleanup();
 
         container
     }
@@ -160,9 +170,15 @@ impl LocalContainerService {
         match getpgid(Some(Pid::from_raw(pid as i32))) {
             Ok(pgid) => {
                 let mut map = self.setup_script_process_groups.write().await;
-                map.entry(task_attempt_id)
-                    .or_default()
-                    .insert(pgid.as_raw());
+                let tracker =
+                    map.entry(task_attempt_id)
+                        .or_insert_with(|| SetupProcessGroupTracker {
+                            pgids: HashSet::new(),
+                            tracked_at: Instant::now(),
+                        });
+                tracker.pgids.insert(pgid.as_raw());
+                // Refresh retention timer on subsequent setup script runs for the same attempt.
+                tracker.tracked_at = Instant::now();
                 tracing::debug!(
                     "Tracking setup script process group {} for task attempt {}",
                     pgid,
@@ -190,7 +206,7 @@ impl LocalContainerService {
     async fn cleanup_setup_script_process_groups(&self, task_attempt_id: Uuid) {
         let groups = {
             let mut map = self.setup_script_process_groups.write().await;
-            map.remove(&task_attempt_id)
+            map.remove(&task_attempt_id).map(|tracker| tracker.pgids)
         };
 
         if let Some(groups) = groups {
@@ -377,6 +393,60 @@ impl LocalContainerService {
                     .unwrap_or_else(|e| {
                         tracing::error!("Failed to clean up expired worktree attempts: {}", e)
                     });
+            }
+        });
+    }
+
+    pub fn spawn_setup_script_timeout_cleanup(&self) {
+        let db = self.db.clone();
+        let container = self.clone();
+        tokio::spawn(async move {
+            let mut cleanup_interval = tokio::time::interval(tokio::time::Duration::from_secs(
+                SETUP_SUBPROCESS_TIMEOUT_SWEEP_INTERVAL_SECS,
+            ));
+
+            loop {
+                cleanup_interval.tick().await;
+
+                let tracked_attempts: Vec<(Uuid, Instant)> = {
+                    let groups = container.setup_script_process_groups.read().await;
+                    groups
+                        .iter()
+                        .map(|(attempt_id, tracker)| (*attempt_id, tracker.tracked_at))
+                        .collect()
+                };
+
+                for (attempt_id, tracked_at) in tracked_attempts {
+                    let age_seconds = tracked_at.elapsed().as_secs();
+                    if age_seconds < SETUP_SUBPROCESS_RETENTION_SECS {
+                        continue;
+                    }
+
+                    match ExecutionProcess::has_running_non_dev_server_processes(
+                        &db.pool, attempt_id,
+                    )
+                    .await
+                    {
+                        Ok(true) => continue,
+                        Ok(false) => {
+                            tracing::info!(
+                                "Timing out setup subprocess retention for attempt {} after {}s",
+                                attempt_id,
+                                age_seconds
+                            );
+                            container
+                                .cleanup_setup_script_process_groups(attempt_id)
+                                .await;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to evaluate running processes for setup retention timeout on attempt {}: {}",
+                                attempt_id,
+                                e
+                            );
+                        }
+                    }
+                }
             }
         });
     }
