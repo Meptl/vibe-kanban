@@ -8,7 +8,7 @@
   </a>
 </p>
 
-![](frontend/public/vibe-kanban-screenshot-overview.png)
+![](frontend/public/overview.png)
 
 ## Overview
 
