@@ -4,7 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const GITHUB_REPOSITORY = "Meptl/vibe-kanban";
-const CACHE_DIR = path.join(require("os").homedir(), ".vibe-kanban", "bin");
+const CACHE_DIR = path.join(require("os").homedir(), ".viboard", "bin");
 
 async function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -14,7 +14,7 @@ async function fetchJson(url) {
         {
           headers: {
             Accept: "application/vnd.github+json",
-            "User-Agent": "vibe-kanban-cli",
+            "User-Agent": "viboard-cli",
           },
         },
         (res) => {
@@ -103,7 +103,7 @@ async function ensureBinary(platform, binaryName, releaseTag, onProgress) {
 
   fs.mkdirSync(cacheDir, { recursive: true });
 
-  const assetName = `npx-vk-bins-${platform}.zip`;
+  const assetName = `npx-vb-bins-${platform}.zip`;
   const url = `https://github.com/${GITHUB_REPOSITORY}/releases/download/${releaseTag}/${assetName}`;
   await downloadFile(url, zipPath, null, onProgress);
 

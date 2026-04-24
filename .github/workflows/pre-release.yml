@@ -223,9 +223,9 @@ jobs:
         run: |
           mkdir -p dist
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp target/${{ matrix.target }}/release/server.exe dist/vibe-kanban-${{ matrix.name }}.exe
+            cp target/${{ matrix.target }}/release/server.exe dist/viboard-${{ matrix.name }}.exe
           else
-            cp target/${{ matrix.target }}/release/server dist/vibe-kanban-${{ matrix.name }}
+            cp target/${{ matrix.target }}/release/server dist/viboard-${{ matrix.name }}
           fi
 
       # Code signing for macOS only
@@ -245,7 +245,7 @@ jobs:
         uses: indygreg/apple-code-sign-action@v1
         with:
           input_path: target/${{ matrix.target }}/release/server
-          output_path: vibe-kanban
+          output_path: viboard
           p12_file: certificate.p12
           p12_password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           sign: true
@@ -253,14 +253,14 @@ jobs:
 
       - name: Package main binary (macOS)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
-        run: zip vibe-kanban.zip vibe-kanban
+        run: zip viboard.zip viboard
 
       - name: Notarize signed binary (macOS)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true' && env.HAS_APP_STORE_KEY == 'true'
         uses: indygreg/apple-code-sign-action@v1
         continue-on-error: true
         with:
-          input_path: vibe-kanban.zip
+          input_path: viboard.zip
           sign: false
           notarize: true
           app_store_connect_api_key_json_file: app_store_key.json
@@ -269,14 +269,14 @@ jobs:
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
         run: |
           mkdir -p dist
-          cp vibe-kanban.zip dist/vibe-kanban-${{ matrix.name }}.zip
+          cp viboard.zip dist/viboard-${{ matrix.name }}.zip
 
       - name: Prepare unsigned binaries (macOS)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT != 'true'
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/server vibe-kanban
-          zip dist/vibe-kanban-${{ matrix.name }}.zip vibe-kanban
+          cp target/${{ matrix.target }}/release/server viboard
+          zip dist/viboard-${{ matrix.name }}.zip viboard
 
       - name: Clean up certificates (macOS)
         if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
@@ -301,16 +301,16 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             name: linux-x64
-            binary: vibe-kanban
+            binary: viboard
           - target: x86_64-pc-windows-msvc
             name: windows-x64
-            binary: vibe-kanban.exe
+            binary: viboard.exe
           - target: x86_64-apple-darwin
             name: macos-x64
-            binary: vibe-kanban
+            binary: viboard
           - target: aarch64-apple-darwin
             name: macos-arm64
-            binary: vibe-kanban
+            binary: viboard
     steps:
       - uses: actions/checkout@v5
         with:
@@ -337,18 +337,18 @@ jobs:
         if: matrix.name != 'macos-arm64' && matrix.name != 'macos-x64'
         run: |
           mkdir -p npx-cli/dist/${{ matrix.name }}
-          mkdir vibe-kanban-${{ matrix.name }}
+          mkdir viboard-${{ matrix.name }}
 
-          cp dist/vibe-kanban-${{ matrix.name }}* vibe-kanban-${{ matrix.name }}/${{ matrix.binary }}
+          cp dist/viboard-${{ matrix.name }}* viboard-${{ matrix.name }}/${{ matrix.binary }}
 
-          zip -j npx-cli/dist/${{ matrix.name }}/vibe-kanban.zip vibe-kanban-${{ matrix.name }}/${{ matrix.binary }}
+          zip -j npx-cli/dist/${{ matrix.name }}/viboard.zip viboard-${{ matrix.name }}/${{ matrix.binary }}
 
       - name: Create platform package (macOS)
         if: matrix.name == 'macos-arm64' || matrix.name == 'macos-x64'
         run: |
           mkdir -p npx-cli/dist/${{ matrix.name }}
-          mkdir vibe-kanban-${{ matrix.name }}
-          cp dist/vibe-kanban-${{ matrix.name }}* npx-cli/dist/${{ matrix.name }}/vibe-kanban.zip
+          mkdir viboard-${{ matrix.name }}
+          cp dist/viboard-${{ matrix.name }}* npx-cli/dist/${{ matrix.name }}/viboard.zip
 
       - name: Upload platform package artifact
         uses: actions/upload-artifact@v4
@@ -365,17 +365,17 @@ jobs:
         include:
           - name: linux-x64
             os: ubuntu-latest
-            release_binary: vibe-kanban
+            release_binary: viboard
             platform_dir: linux-x64
             builder_args: --linux
           - name: windows-x64
             os: windows-latest
-            release_binary: vibe-kanban.exe
+            release_binary: viboard.exe
             platform_dir: windows-x64
             builder_args: --win
           - name: macos-arm64
             os: macos-14
-            release_binary: vibe-kanban
+            release_binary: viboard
             platform_dir: macos-arm64
             builder_args: --mac --arm64
     steps:
@@ -414,7 +414,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path target/release | Out-Null
-          Expand-Archive -Path "binaries/${{ matrix.platform_dir }}/vibe-kanban.zip" -DestinationPath target/release -Force
+          Expand-Archive -Path "binaries/${{ matrix.platform_dir }}/viboard.zip" -DestinationPath target/release -Force
           Move-Item -Path "target/release/${{ matrix.release_binary }}" -Destination "target/release/server.exe" -Force
           Get-ChildItem target/release
 
@@ -423,7 +423,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p target/release
-          unzip -o "binaries/${{ matrix.platform_dir }}/vibe-kanban.zip" -d target/release
+          unzip -o "binaries/${{ matrix.platform_dir }}/viboard.zip" -d target/release
           mv "target/release/${{ matrix.release_binary }}" target/release/server
           chmod +x target/release/server
           ls -la target/release
@@ -483,15 +483,15 @@ jobs:
         run: |
           mkdir -p release-assets
           for platform in linux-x64 windows-x64 macos-x64 macos-arm64; do
-            cp "binaries/$platform/vibe-kanban.zip" "release-assets/npx-vk-bins-$platform.zip"
+            cp "binaries/$platform/viboard.zip" "release-assets/npx-vb-bins-$platform.zip"
           done
           find electron-binaries -maxdepth 1 -type f -exec cp {} release-assets/ \;
 
       - name: Zip frontend
         run: |
-          mkdir vibe-kanban-${{ needs.bump-version.outputs.new_tag }}
-          mv frontend/dist vibe-kanban-${{ needs.bump-version.outputs.new_tag }}
-          zip -r vibe-kanban-${{ needs.bump-version.outputs.new_tag }}.zip vibe-kanban-${{ needs.bump-version.outputs.new_tag }}
+          mkdir viboard-${{ needs.bump-version.outputs.new_tag }}
+          mv frontend/dist viboard-${{ needs.bump-version.outputs.new_tag }}
+          zip -r viboard-${{ needs.bump-version.outputs.new_tag }}.zip viboard-${{ needs.bump-version.outputs.new_tag }}
 
       - name: Setup Node for npm pack
         uses: ./.github/actions/setup-node
@@ -509,9 +509,9 @@ jobs:
           prerelease: true
           generate_release_notes: true
           files: |
-            release-assets/npx-vk-bins-*.zip
+            release-assets/npx-vb-bins-*.zip
             release-assets/*.AppImage
             release-assets/*.deb
             release-assets/*.exe
             release-assets/*.dmg
-            npx-cli/vibe-kanban-*.tgz
+            npx-cli/viboard-*.tgz

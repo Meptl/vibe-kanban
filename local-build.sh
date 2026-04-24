@@ -15,11 +15,11 @@ cargo build --release --manifest-path Cargo.toml
 echo "📦 Creating distribution package..."
 
 # Copy the main binary
-cp target/release/server vibe-kanban
-zip -q vibe-kanban.zip vibe-kanban
-rm -f vibe-kanban 
-mv vibe-kanban.zip npx-cli/dist/macos-arm64/vibe-kanban.zip
+cp target/release/server viboard
+zip -q viboard.zip viboard
+rm -f viboard
+mv viboard.zip npx-cli/dist/macos-arm64/viboard.zip
 
 echo "✅ NPM package ready!"
 echo "📁 Files created:"
-echo "   - npx-cli/dist/macos-arm64/vibe-kanban.zip"
+echo "   - npx-cli/dist/macos-arm64/viboard.zip"

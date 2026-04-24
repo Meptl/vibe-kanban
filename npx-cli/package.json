@@ -1,15 +1,16 @@
 {
-  "name": "vibe-kanban",
+  "name": "viboard",
   "private": false,
   "version": "0.0.142",
   "main": "index.js",
   "bin": {
-    "vibe-kanban": "bin/cli.js"
+    "viboard": "bin/cli.js",
+    "vb": "bin/cli.js"
   },
   "keywords": [],
   "author": "bloop",
   "license": "",
-  "description": "NPX wrapper around vibe-kanban",
+  "description": "NPX wrapper around viboard",
   "dependencies": {
     "adm-zip": "^0.5.16"
   },

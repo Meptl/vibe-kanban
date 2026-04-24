@@ -1,13 +1,11 @@
 {
-  "name": "vibe-kanban",
+  "name": "viboard",
   "author": {
     "email": "meptl@meptl.com"
   },
+  "homepage": "https://github.com/Meptl/viboard",
   "version": "0.0.142",
   "private": true,
-  "bin": {
-    "vibe-kanban": "npx-cli/bin/cli.js"
-  },
   "files": [
     "npx-cli/bin/**",
     "npx-cli/dist/**"

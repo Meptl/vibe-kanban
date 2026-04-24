@@ -140,8 +140,10 @@ function writeBuilderConfig() {
   const backendPath = backendBinaryPath();
 
   const config = {
-    appId: 'ai.bloop.vibekanban',
+    appId: 'com.meptl.viboard',
     productName: 'Viboard',
+    executableName: 'viboard',
+    artifactName: 'viboard-${version}-${arch}.${ext}',
     directories: {
       output: electronOutDir,
       buildResources: path.join(rootDir, 'assets', 'logo'),
@@ -166,6 +168,10 @@ function writeBuilderConfig() {
       target: ['AppImage', 'deb'],
       category: 'Development',
       icon: iconPath,
+      executableName: 'viboard',
+    },
+    deb: {
+      packageName: 'viboard',
     },
     mac: {
       target: ['dmg', 'zip'],

@@ -91,7 +91,7 @@ async function extractAndRun(baseName, releaseTag, launch) {
       fs.unlinkSync(binPath);
     }
   } catch (err) {
-    if (process.env.VIBE_KANBAN_DEBUG) {
+    if (process.env.VIBOARD_DEBUG) {
       console.warn(`Warning: Could not delete existing binary: ${err.message}`);
     }
   }
@@ -140,12 +140,12 @@ async function extractAndRun(baseName, releaseTag, launch) {
 
 async function main() {
   const releaseTag =
-    process.env.VIBE_KANBAN_RELEASE_TAG || (await getLatestVersion());
+    process.env.VIBOARD_RELEASE_TAG || (await getLatestVersion());
   const versionCacheDir = path.join(CACHE_DIR, releaseTag, platformDir);
   fs.mkdirSync(versionCacheDir, { recursive: true });
 
   console.log(`Starting viboard v${CLI_VERSION} (${releaseTag})...`);
-  await extractAndRun("vibe-kanban", releaseTag, (bin) => {
+  await extractAndRun("viboard", releaseTag, (bin) => {
     if (platform === "win32") {
       execSync(`"${bin}"`, { stdio: "inherit" });
     } else {
@@ -156,7 +156,7 @@ async function main() {
 
 main().catch((err) => {
   console.error("Fatal error:", err.message);
-  if (process.env.VIBE_KANBAN_DEBUG) {
+  if (process.env.VIBOARD_DEBUG) {
     console.error(err.stack);
   }
   process.exit(1);
