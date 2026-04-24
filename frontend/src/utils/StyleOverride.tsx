@@ -85,6 +85,39 @@ export function AppWithStyleOverride({
     }
   }, []);
 
+  // Override the click-to-component floating button icon with the current
+  // project favicon so preview targeting mode stays visually in sync.
+  useEffect(() => {
+    const ICON_SRC = '/favicon-vk-light-maskable.svg';
+
+    const applyTargetingIcon = () => {
+      const buttonImages = document.querySelectorAll<HTMLImageElement>(
+        'button img[alt="VK Icon"]'
+      );
+
+      buttonImages.forEach((img) => {
+        const button = img.closest('button');
+        const title = button?.getAttribute('title')?.toLowerCase() ?? '';
+        if (!title.includes('target')) {
+          return;
+        }
+
+        if (img.getAttribute('src') !== ICON_SRC) {
+          img.setAttribute('src', ICON_SRC);
+        }
+      });
+    };
+
+    applyTargetingIcon();
+
+    const observer = new MutationObserver(() => {
+      applyTargetingIcon();
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, []);
+
   // Send navigation updates so parent preview toolbars can track SPA routes.
   useEffect(() => {
     const allowedOrigin = import.meta.env.VITE_PARENT_ORIGIN;
