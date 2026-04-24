@@ -1,7 +1,7 @@
 {
   "name": "viboard",
   "private": false,
-  "version": "0.0.142",
+  "version": "0.0.143",
   "main": "index.js",
   "bin": {
     "viboard": "bin/cli.js",

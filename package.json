@@ -4,7 +4,7 @@
     "email": "meptl@meptl.com"
   },
   "homepage": "https://github.com/Meptl/viboard",
-  "version": "0.0.142",
+  "version": "0.0.143",
   "private": true,
   "files": [
     "npx-cli/bin/**",
