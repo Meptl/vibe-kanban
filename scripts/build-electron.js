@@ -136,7 +136,7 @@ function persistFrontendInputsHash() {
 }
 
 function writeBuilderConfig() {
-  const iconPath = path.join(rootDir, 'docs', 'logo', 'v-768.png');
+  const iconPath = path.join(rootDir, 'assets', 'logo', 'v-768.png');
   const backendPath = backendBinaryPath();
 
   const config = {
@@ -144,7 +144,7 @@ function writeBuilderConfig() {
     productName: 'Viboard',
     directories: {
       output: electronOutDir,
-      buildResources: path.join(rootDir, 'docs', 'logo'),
+      buildResources: path.join(rootDir, 'assets', 'logo'),
     },
     files: [
       {
