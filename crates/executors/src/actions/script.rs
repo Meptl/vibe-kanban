@@ -5,7 +5,7 @@ use command_group::AsyncCommandGroup;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 use ts_rs::TS;
-use workspace_utils::{path::get_vibe_kanban_temp_dir, shell::get_shell_command};
+use workspace_utils::{path::get_viboard_temp_dir, shell::get_shell_command};
 
 use crate::{
     actions::Executable,
@@ -44,7 +44,7 @@ impl Executable for ScriptRequest {
     ) -> Result<SpawnedChild, ExecutorError> {
         let script_to_run = if matches!(self.context, ScriptContext::SetupScript) {
             if let Some(attempt_id) = env.get("VK_ATTEMPT_ID") {
-                let setup_env_dir = get_vibe_kanban_temp_dir().join("setup-env");
+                let setup_env_dir = get_viboard_temp_dir().join("setup-env");
                 let setup_env_before = setup_env_dir.join(format!("{attempt_id}.before"));
                 let setup_env_after = setup_env_dir.join(format!("{attempt_id}.after"));
                 let setup_env_diff = setup_env_dir.join(format!("{attempt_id}.diff"));

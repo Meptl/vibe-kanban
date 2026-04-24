@@ -9,5 +9,5 @@ pub(super) mod v8;
 pub(super) mod v9;
 
 pub(super) fn default_git_branch_prefix() -> String {
-    "vk".to_string()
+    "vb".to_string()
 }

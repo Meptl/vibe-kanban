@@ -101,13 +101,7 @@ pub fn normalize_macos_private_alias<P: AsRef<Path>>(p: P) -> PathBuf {
     p.to_path_buf()
 }
 
-pub fn get_vibe_kanban_temp_dir() -> std::path::PathBuf {
-    let dir_name = if cfg!(debug_assertions) {
-        "vibe-kanban-dev"
-    } else {
-        "vibe-kanban"
-    };
-
+fn app_temp_dir(dir_name: &str) -> std::path::PathBuf {
     if cfg!(target_os = "macos") {
         // macOS already uses /var/folders/... which is persistent storage
         std::env::temp_dir().join(dir_name)
@@ -115,9 +109,19 @@ pub fn get_vibe_kanban_temp_dir() -> std::path::PathBuf {
         // Linux: use /var/tmp instead of /tmp to avoid RAM usage
         std::path::PathBuf::from("/var/tmp").join(dir_name)
     } else {
-        // Windows and other platforms: use temp dir with vibe-kanban subdirectory
+        // Windows and other platforms: use temp dir with app-specific subdirectory
         std::env::temp_dir().join(dir_name)
     }
+}
+
+pub fn get_viboard_temp_dir() -> std::path::PathBuf {
+    let dir_name = if cfg!(debug_assertions) {
+        "viboard-dev"
+    } else {
+        "viboard"
+    };
+
+    app_temp_dir(dir_name)
 }
 
 /// Expand leading ~ to user's home directory.

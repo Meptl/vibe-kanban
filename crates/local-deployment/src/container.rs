@@ -60,7 +60,7 @@ use tokio_util::io::ReaderStream;
 use utils::{
     log_msg::LogMsg,
     msg_store::MsgStore,
-    path::get_vibe_kanban_temp_dir,
+    path::get_viboard_temp_dir,
     text::{git_branch_id, short_uuid, truncate_to_char_boundary},
 };
 use uuid::Uuid;
@@ -708,7 +708,7 @@ impl LocalContainerService {
     }
 
     fn setup_env_diff_paths(task_attempt_id: &Uuid) -> (PathBuf, PathBuf, PathBuf) {
-        let base = get_vibe_kanban_temp_dir().join("setup-env");
+        let base = get_viboard_temp_dir().join("setup-env");
         (
             base.join(format!("{task_attempt_id}.diff")),
             base.join(format!("{task_attempt_id}.before")),

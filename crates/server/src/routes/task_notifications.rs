@@ -96,9 +96,8 @@ async fn handle_task_notifications_ws(
 }
 
 pub fn router() -> Router<DeploymentImpl> {
-    Router::new()
-        .route(
-            "/task-notifications/stream/ws",
-            get(stream_task_notifications_ws),
-        )
+    Router::new().route(
+        "/task-notifications/stream/ws",
+        get(stream_task_notifications_ws),
+    )
 }
