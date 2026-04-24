@@ -81,7 +81,7 @@ export function Navbar() {
 
   const handleProjectChange = (nextProjectId: string) => {
     if (nextProjectId === selectedProjectId) return;
-    navigate(paths.projectTasks(nextProjectId));
+    navigate(paths.project(nextProjectId));
   };
 
   return (

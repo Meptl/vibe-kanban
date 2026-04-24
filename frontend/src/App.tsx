@@ -4,7 +4,6 @@ import {
   Navigate,
   Route,
   Routes,
-  generatePath,
   useParams,
 } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
@@ -30,6 +29,9 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { ProjectProvider } from '@/contexts/ProjectContext';
 import { ThemeMode } from 'shared/types';
 import { Loader } from '@/components/ui/loader';
+import { useProjectBranches } from '@/hooks/useProjectBranches';
+import { isUnderlyingRepoNotDetectedError } from '@/lib/repositoryErrors';
+import { paths } from '@/lib/paths';
 
 import { DisclaimerDialog } from '@/components/dialogs/global/DisclaimerDialog';
 import { ClickedElementsProvider } from './contexts/ClickedElementsProvider';
@@ -38,17 +40,19 @@ import { TaskNotificationsProvider } from '@/contexts/TaskNotificationsContext';
 
 function ProjectRouteRedirect() {
   const { projectId } = useParams<{ projectId: string }>();
+  const { error: projectBranchesError } = useProjectBranches(projectId);
 
   if (!projectId) {
-    return <Navigate to="/projects" replace />;
+    return <Navigate to={paths.projects()} replace />;
   }
 
-  return (
-    <Navigate
-      to={generatePath('/projects/:projectId/tasks', { projectId })}
-      replace
-    />
-  );
+  if (isUnderlyingRepoNotDetectedError(projectBranchesError)) {
+    return (
+      <Navigate to={paths.projectRepositoryNotDetected(projectId)} replace />
+    );
+  }
+
+  return <Navigate to={paths.projectTasks(projectId)} replace />;
 }
 
 function AppContent() {

@@ -7,5 +7,6 @@ export function useProjectBranches(projectId?: string) {
     queryKey: ['projectBranches', projectId],
     queryFn: () => projectsApi.getBranches(projectId!),
     enabled: !!projectId,
+    retry: false,
   });
 }
