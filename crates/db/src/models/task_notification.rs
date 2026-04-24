@@ -177,18 +177,6 @@ impl TaskNotification {
         Ok(result.rows_affected())
     }
 
-    pub async fn delete_by_project(
-        pool: &SqlitePool,
-        project_id: Uuid,
-    ) -> Result<u64, sqlx::Error> {
-        let result = sqlx::query("DELETE FROM task_notifications WHERE project_id = ?")
-            .bind(project_id)
-            .execute(pool)
-            .await?;
-
-        Ok(result.rows_affected())
-    }
-
     pub async fn delete_all(pool: &SqlitePool) -> Result<u64, sqlx::Error> {
         let result = sqlx::query("DELETE FROM task_notifications")
             .execute(pool)

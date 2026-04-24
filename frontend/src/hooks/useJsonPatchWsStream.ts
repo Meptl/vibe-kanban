@@ -22,6 +22,7 @@ interface UseJsonPatchStreamResult<T> {
   isConnected: boolean;
   isFinished: boolean;
   error: string | null;
+  sendJson: (message: unknown) => boolean;
 }
 
 /**
@@ -60,6 +61,16 @@ export const useJsonPatchWsStream = <T extends object>(
       retryTimerRef.current = null;
       setRetryNonce((n) => n + 1);
     }, delay);
+  }, []);
+
+  const sendJson = useCallback((message: unknown): boolean => {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    socket.send(JSON.stringify(message));
+    return true;
   }, []);
 
   useEffect(() => {
@@ -225,5 +236,5 @@ export const useJsonPatchWsStream = <T extends object>(
     retryNonce,
   ]);
 
-  return { data, isConnected, isFinished, error };
+  return { data, isConnected, isFinished, error, sendJson };
 };

@@ -10,11 +10,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckCircle, XCircle } from 'lucide-react';
-import {
-  taskNotificationsApi,
-  type TaskNotificationOutcome,
-  type TaskNotificationRecord,
-} from '@/lib/api';
+import { type TaskNotificationOutcome, type TaskNotificationRecord } from '@/lib/api';
 import { useUserSystem } from '@/components/ConfigProvider';
 import { paths } from '@/lib/paths';
 import { useJsonPatchWsStream } from '@/hooks/useJsonPatchWsStream';
@@ -31,7 +27,6 @@ export interface TaskNotification {
 interface TaskNotificationsContextValue {
   notifications: TaskNotification[];
   clearTaskNotifications: (projectId: string, taskId: string) => void;
-  clearProjectNotifications: (projectId: string) => void;
   clearAllNotifications: () => void;
   resolveNextNotification: () => boolean;
 }
@@ -47,6 +42,10 @@ interface InAppToast {
 interface TaskNotificationsStreamState {
   task_notifications: Record<string, TaskNotificationRecord>;
 }
+
+type TaskNotificationsCommand =
+  | { type: 'clear_task'; project_id: string; task_id: string }
+  | { type: 'clear_all' };
 
 const TaskNotificationsContext =
   createContext<TaskNotificationsContextValue | null>(null);
@@ -102,7 +101,7 @@ export function TaskNotificationsProvider({
     []
   );
 
-  const { data: streamData } = useJsonPatchWsStream<TaskNotificationsStreamState>(
+  const { data: streamData, sendJson } = useJsonPatchWsStream<TaskNotificationsStreamState>(
     '/api/task-notifications/stream/ws',
     true,
     initialStreamData
@@ -118,6 +117,15 @@ export function TaskNotificationsProvider({
     setNotificationsById(nextNotificationsById);
   }, [streamData]);
 
+  const sendCommand = useCallback(
+    (command: TaskNotificationsCommand, errorLabel: string) => {
+      if (!sendJson(command)) {
+        console.error(errorLabel);
+      }
+    },
+    [sendJson]
+  );
+
   const clearTaskNotifications = useCallback((projectId: string, taskId: string) => {
     setNotificationsById((prev) => {
       const next = { ...prev };
@@ -129,34 +137,23 @@ export function TaskNotificationsProvider({
       return next;
     });
 
-    void taskNotificationsApi.clearTask(projectId, taskId).catch((error) => {
-      console.error('Failed to clear task notifications', error);
-    });
-  }, []);
-
-  const clearProjectNotifications = useCallback((projectId: string) => {
-    setNotificationsById((prev) => {
-      const next = { ...prev };
-      for (const [id, notification] of Object.entries(prev)) {
-        if (notification.projectId === projectId) {
-          delete next[id];
-        }
-      }
-      return next;
-    });
-
-    void taskNotificationsApi.clearProject(projectId).catch((error) => {
-      console.error('Failed to clear project notifications', error);
-    });
-  }, []);
+    sendCommand(
+      {
+        type: 'clear_task',
+        project_id: projectId,
+        task_id: taskId,
+      },
+      'Failed to send clear task notifications command over websocket'
+    );
+  }, [sendCommand]);
 
   const clearAllNotifications = useCallback(() => {
     setNotificationsById({});
-
-    void taskNotificationsApi.clearAll().catch((error) => {
-      console.error('Failed to clear all notifications', error);
-    });
-  }, []);
+    sendCommand(
+      { type: 'clear_all' },
+      'Failed to send clear all notifications command over websocket'
+    );
+  }, [sendCommand]);
 
   const resolveNextNotification = useCallback(() => {
     const notifications = Object.values(notificationsById);
@@ -310,14 +307,12 @@ export function TaskNotificationsProvider({
     () => ({
       notifications,
       clearTaskNotifications,
-      clearProjectNotifications,
       clearAllNotifications,
       resolveNextNotification,
     }),
     [
       notifications,
       clearTaskNotifications,
-      clearProjectNotifications,
       clearAllNotifications,
       resolveNextNotification,
     ]

@@ -1,40 +1,25 @@
 use axum::{
-    Json, Router,
+    Router,
     extract::{
-        Query, State,
-        ws::{WebSocket, WebSocketUpgrade},
+        State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    response::{IntoResponse, Json as ResponseJson},
+    response::IntoResponse,
     routing::get,
 };
-use db::models::task_notification::{CreateTaskNotification, TaskNotification};
+use db::models::task_notification::TaskNotification;
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use local_deployment::Deployment;
 use serde::Deserialize;
-use utils::response::ApiResponse;
 use uuid::Uuid;
 
-use crate::{DeploymentImpl, error::ApiError};
+use crate::DeploymentImpl;
 
 #[derive(Debug, Deserialize)]
-pub struct DeleteTaskNotificationsQuery {
-    pub project_id: Option<Uuid>,
-    pub task_id: Option<Uuid>,
-}
-
-pub async fn list_task_notifications(
-    State(deployment): State<DeploymentImpl>,
-) -> Result<ResponseJson<ApiResponse<Vec<TaskNotification>>>, ApiError> {
-    let notifications = TaskNotification::find_all(&deployment.db().pool).await?;
-    Ok(ResponseJson(ApiResponse::success(notifications)))
-}
-
-pub async fn create_task_notification(
-    State(deployment): State<DeploymentImpl>,
-    Json(payload): Json<CreateTaskNotification>,
-) -> Result<ResponseJson<ApiResponse<TaskNotification>>, ApiError> {
-    let notification = TaskNotification::create(&deployment.db().pool, &payload).await?;
-    Ok(ResponseJson(ApiResponse::success(notification)))
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TaskNotificationsCommand {
+    ClearTask { project_id: Uuid, task_id: Uuid },
+    ClearAll,
 }
 
 pub async fn stream_task_notifications_ws(
@@ -60,18 +45,49 @@ async fn handle_task_notifications_ws(
 
     let (mut sender, mut receiver) = socket.split();
 
-    tokio::spawn(async move { while let Some(Ok(_)) = receiver.next().await {} });
-
-    while let Some(item) = stream.next().await {
-        match item {
-            Ok(msg) => {
-                if sender.send(msg).await.is_err() {
-                    break;
+    loop {
+        tokio::select! {
+            inbound = receiver.next() => {
+                match inbound {
+                    None => break,
+                    Some(Ok(Message::Close(_))) => break,
+                    Some(Ok(Message::Text(text))) => {
+                        match serde_json::from_str::<TaskNotificationsCommand>(&text) {
+                            Ok(TaskNotificationsCommand::ClearTask { project_id, task_id }) => {
+                                if let Err(err) = TaskNotification::delete_by_task(&deployment.db().pool, project_id, task_id).await {
+                                    tracing::warn!("failed to clear task notifications via ws for project {} task {}: {}", project_id, task_id, err);
+                                }
+                            }
+                            Ok(TaskNotificationsCommand::ClearAll) => {
+                                if let Err(err) = TaskNotification::delete_all(&deployment.db().pool).await {
+                                    tracing::warn!("failed to clear all notifications via ws: {}", err);
+                                }
+                            }
+                            Err(err) => {
+                                tracing::warn!("invalid task notifications ws command: {}", err);
+                            }
+                        }
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(err)) => {
+                        tracing::warn!("task notifications ws receive error: {}", err);
+                        break;
+                    }
                 }
             }
-            Err(e) => {
-                tracing::error!("stream error: {}", e);
-                break;
+            outbound = stream.next() => {
+                match outbound {
+                    Some(Ok(msg)) => {
+                        if sender.send(msg).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Err(err)) => {
+                        tracing::error!("task notifications stream error: {}", err);
+                        break;
+                    }
+                    None => break,
+                }
             }
         }
     }
@@ -79,37 +95,8 @@ async fn handle_task_notifications_ws(
     Ok(())
 }
 
-pub async fn delete_task_notifications_for_task(
-    State(deployment): State<DeploymentImpl>,
-    Query(query): Query<DeleteTaskNotificationsQuery>,
-) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
-    match (query.project_id, query.task_id) {
-        (Some(project_id), Some(task_id)) => {
-            TaskNotification::delete_by_task(&deployment.db().pool, project_id, task_id).await?;
-        }
-        (Some(project_id), None) => {
-            TaskNotification::delete_by_project(&deployment.db().pool, project_id).await?;
-        }
-        (None, None) => {
-            TaskNotification::delete_all(&deployment.db().pool).await?;
-        }
-        (None, Some(_)) => {
-            return Err(ApiError::BadRequest(
-                "project_id is required when task_id is provided".to_string(),
-            ));
-        }
-    }
-    Ok(ResponseJson(ApiResponse::success(())))
-}
-
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
-        .route(
-            "/task-notifications",
-            get(list_task_notifications)
-                .post(create_task_notification)
-                .delete(delete_task_notifications_for_task),
-        )
         .route(
             "/task-notifications/stream/ws",
             get(stream_task_notifications_ws),
