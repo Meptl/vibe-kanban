@@ -240,6 +240,7 @@ pub async fn get_task_attempt_diff(
     ))))
 }
 
+#[allow(clippy::needless_borrow)]
 async fn get_task_attempt_diff_for_file(
     file_path: String,
     task_attempt: &TaskAttempt,
@@ -716,9 +717,7 @@ fn apply_diff_metadata_event(
             Some(DiffMetadataWsMessage::Upsert { path, diff })
         }
         DiffMetadataPatchEvent::Remove { path } => {
-            if entries.remove(&path).is_none() {
-                return None;
-            }
+            entries.remove(&path)?;
             Some(DiffMetadataWsMessage::Remove { path })
         }
     }

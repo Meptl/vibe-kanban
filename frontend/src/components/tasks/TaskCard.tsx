@@ -9,6 +9,7 @@ import { useNavigateWithSearch } from '@/hooks';
 import { paths } from '@/lib/paths';
 import { attemptsApi } from '@/lib/api';
 import { TaskCardHeader } from './TaskCardHeader';
+import { TaskOriginBadge } from './TaskOriginBadge';
 
 type Task = TaskWithAttemptStatus;
 
@@ -31,6 +32,9 @@ export function TaskCardContent({ task, right }: TaskCardContentProps) {
   return (
     <div className="group flex flex-col gap-2">
       <TaskCardHeader title={task.title} right={right} />
+      <div className="flex min-w-0 items-center">
+        <TaskOriginBadge origin={task.origin} />
+      </div>
     </div>
   );
 }

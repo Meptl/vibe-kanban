@@ -999,7 +999,7 @@ impl GitService {
 
         let has_tracked_changes = status.uncommitted_tracked > 0;
         let has_untracked_changes = status.untracked > 0;
-        if !has_tracked_changes && !(include_untracked && has_untracked_changes) {
+        if !(has_tracked_changes || include_untracked && has_untracked_changes) {
             return Ok(());
         }
 

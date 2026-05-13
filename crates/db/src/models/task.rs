@@ -22,6 +22,117 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+
+    use super::*;
+    use crate::models::project::{CreateProject, Project};
+
+    async fn test_pool() -> SqlitePool {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .create_if_missing(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        pool
+    }
+
+    async fn create_test_project(pool: &SqlitePool) -> Project {
+        Project::create(
+            pool,
+            &CreateProject {
+                name: "Origin persistence test".to_string(),
+                git_repo_path: format!("/tmp/viboard-origin-test-{}", Uuid::new_v4()),
+                use_existing_repo: false,
+                setup_script: None,
+                dev_script: None,
+                cleanup_script: None,
+                copy_files: None,
+                parallel_setup_script: Some(false),
+            },
+            Uuid::new_v4(),
+        )
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn create_task_defaults_origin_to_human_and_round_trips() {
+        let pool = test_pool().await;
+        let project = create_test_project(&pool).await;
+        let task_id = Uuid::new_v4();
+
+        let created = Task::create(
+            &pool,
+            &CreateTask {
+                project_id: project.id,
+                title: "user task".to_string(),
+                description: None,
+                status: None,
+                origin: None,
+                parent_task_attempt: None,
+                image_ids: None,
+            },
+            task_id,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(created.origin, TaskOrigin::Human);
+
+        let fetched = Task::find_by_id(&pool, task_id).await.unwrap().unwrap();
+        assert_eq!(fetched.origin, TaskOrigin::Human);
+    }
+
+    #[tokio::test]
+    async fn create_task_persists_agent_origin_in_task_list_projection() {
+        let pool = test_pool().await;
+        let project = create_test_project(&pool).await;
+        let task_id = Uuid::new_v4();
+
+        Task::create(
+            &pool,
+            &CreateTask {
+                project_id: project.id,
+                title: "agent task".to_string(),
+                description: None,
+                status: Some(TaskStatus::Todo),
+                origin: Some(TaskOrigin::Agent),
+                parent_task_attempt: None,
+                image_ids: None,
+            },
+            task_id,
+        )
+        .await
+        .unwrap();
+
+        let tasks = Task::find_by_project_id_with_attempt_status(&pool, project.id)
+            .await
+            .unwrap();
+        let task = tasks.iter().find(|task| task.id == task_id).unwrap();
+        assert_eq!(task.origin, TaskOrigin::Agent);
+    }
+}
+
+#[derive(
+    Debug, Clone, Type, Serialize, Deserialize, PartialEq, TS, EnumString, Display, Default,
+)]
+#[sqlx(type_name = "task_origin", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum TaskOrigin {
+    #[default]
+    Human,
+    Agent,
+}
+
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, TS)]
 pub struct Task {
     pub id: Uuid,
@@ -29,6 +140,7 @@ pub struct Task {
     pub title: String,
     pub description: Option<String>,
     pub status: TaskStatus,
+    pub origin: TaskOrigin,
     pub parent_task_attempt: Option<Uuid>, // Foreign key to parent TaskAttempt
     pub pinned: bool,
     pub created_at: DateTime<Utc>,
@@ -72,6 +184,7 @@ pub struct CreateTask {
     pub title: String,
     pub description: Option<String>,
     pub status: Option<TaskStatus>,
+    pub origin: Option<TaskOrigin>,
     pub parent_task_attempt: Option<Uuid>,
     pub image_ids: Option<Vec<Uuid>>,
 }
@@ -102,6 +215,7 @@ struct TaskWithAttemptStatusRow {
     title: String,
     description: Option<String>,
     status: TaskStatus,
+    origin: TaskOrigin,
     parent_task_attempt: Option<Uuid>,
     pinned: bool,
     created_at: DateTime<Utc>,
@@ -167,6 +281,7 @@ impl Task {
   t.title,
   t.description,
   t.status                        AS status,
+  t.origin                        AS origin,
   t.parent_task_attempt           AS parent_task_attempt,
   t.pinned                        AS pinned,
   t.created_at                    AS created_at,
@@ -219,6 +334,7 @@ ORDER BY t.created_at DESC"#,
                     title: rec.title,
                     description: rec.description,
                     status: rec.status,
+                    origin: rec.origin,
                     parent_task_attempt: rec.parent_task_attempt,
                     pinned: rec.pinned,
                     created_at: rec.created_at,
@@ -239,7 +355,7 @@ ORDER BY t.created_at DESC"#,
         max_cancelled_at: DateTime<Utc>,
     ) -> Result<Vec<Self>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            r#"SELECT id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at
+            r#"SELECT id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at
                FROM tasks
                WHERE status = $1
                  AND pinned = 0
@@ -254,7 +370,7 @@ ORDER BY t.created_at DESC"#,
 
     pub async fn find_by_id(pool: &SqlitePool, id: Uuid) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            r#"SELECT id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at
+            r#"SELECT id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at
                FROM tasks 
                WHERE id = $1"#,
         )
@@ -265,7 +381,7 @@ ORDER BY t.created_at DESC"#,
 
     pub async fn find_by_rowid(pool: &SqlitePool, rowid: i64) -> Result<Option<Self>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            r#"SELECT id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at
+            r#"SELECT id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at
                FROM tasks 
                WHERE rowid = $1"#,
         )
@@ -280,8 +396,9 @@ ORDER BY t.created_at DESC"#,
         task_id: Uuid,
     ) -> Result<Self, sqlx::Error> {
         let status = data.status.clone().unwrap_or_default();
+        let origin = data.origin.clone().unwrap_or_default();
         sqlx::query_as::<_, Task>(
-            r#"INSERT INTO tasks (id, project_id, title, description, status, parent_task_attempt, cancelled_at)
+            r#"INSERT INTO tasks (id, project_id, title, description, status, origin, parent_task_attempt, cancelled_at)
                VALUES (
                    $1,
                    $2,
@@ -289,20 +406,23 @@ ORDER BY t.created_at DESC"#,
                    $4,
                    $5,
                    $6,
+                   $7,
                    CASE WHEN $5 = 'cancelled' THEN CURRENT_TIMESTAMP ELSE NULL END
                )
-               RETURNING id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at"#,
+               RETURNING id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at"#,
         )
         .bind(task_id)
         .bind(data.project_id)
         .bind(&data.title)
         .bind(&data.description)
         .bind(status)
+        .bind(origin)
         .bind(data.parent_task_attempt)
         .fetch_one(pool)
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update(
         pool: &SqlitePool,
         id: Uuid,
@@ -326,7 +446,7 @@ ORDER BY t.created_at DESC"#,
                        ELSE NULL
                    END
                WHERE id = $1 AND project_id = $2 
-               RETURNING id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at"#,
+               RETURNING id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at"#,
         )
         .bind(id)
         .bind(project_id)
@@ -411,7 +531,7 @@ ORDER BY t.created_at DESC"#,
     ) -> Result<Vec<Self>, sqlx::Error> {
         // Find only child tasks that have this attempt as their parent
         sqlx::query_as::<_, Task>(
-            r#"SELECT id, project_id, title, description, status, parent_task_attempt, pinned, created_at, updated_at
+            r#"SELECT id, project_id, title, description, status, origin, parent_task_attempt, pinned, created_at, updated_at
                FROM tasks 
                WHERE parent_task_attempt = $1
                ORDER BY created_at DESC"#,

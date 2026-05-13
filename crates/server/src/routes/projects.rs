@@ -92,15 +92,7 @@ fn openclaw_project_agent_name(project: &Project) -> String {
         .name
         .to_ascii_lowercase()
         .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch
-            } else if ch.is_ascii_whitespace() || ch == '-' {
-                '_'
-            } else {
-                '_'
-            }
-        })
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
         .collect::<String>();
     slug = slug
         .split('_')
@@ -315,15 +307,13 @@ struct OpenClawDeviceIdentity {
 fn get_or_create_openclaw_device_identity() -> Result<OpenClawDeviceIdentity, ApiError> {
     let identity_path = openclaw_root_path().join("device-identity.json");
 
-    if let Ok(raw) = std::fs::read_to_string(&identity_path) {
-        if let Ok(identity) = serde_json::from_str::<OpenClawDeviceIdentity>(&raw) {
-            if !identity.device_id.is_empty()
-                && !identity.public_key_b64url.is_empty()
-                && !identity.private_key_b64url.is_empty()
-            {
-                return Ok(identity);
-            }
-        }
+    if let Ok(raw) = std::fs::read_to_string(&identity_path)
+        && let Ok(identity) = serde_json::from_str::<OpenClawDeviceIdentity>(&raw)
+        && !identity.device_id.is_empty()
+        && !identity.public_key_b64url.is_empty()
+        && !identity.private_key_b64url.is_empty()
+    {
+        return Ok(identity);
     }
 
     let mut seed = [0u8; 32];
@@ -539,13 +529,13 @@ async fn invoke_openclaw_tool(
         "tool": tool,
         "args": args,
     });
-    if let Some(session_key) = session_key.map(str::trim).filter(|s| !s.is_empty()) {
-        if let Some(obj) = body.as_object_mut() {
-            obj.insert(
-                "sessionKey".to_string(),
-                serde_json::Value::String(session_key.to_string()),
-            );
-        }
+    if let Some(session_key) = session_key.map(str::trim).filter(|s| !s.is_empty())
+        && let Some(obj) = body.as_object_mut()
+    {
+        obj.insert(
+            "sessionKey".to_string(),
+            serde_json::Value::String(session_key.to_string()),
+        );
     }
 
     let mut request = client
@@ -712,10 +702,10 @@ fn persistent_normalize_origin(value: &str) -> Option<String> {
 }
 
 fn persistent_gateway_request_origin() -> String {
-    if let Ok(value) = std::env::var("PUBLIC_ORIGIN") {
-        if let Some(origin) = persistent_normalize_origin(&value) {
-            return origin;
-        }
+    if let Ok(value) = std::env::var("PUBLIC_ORIGIN")
+        && let Some(origin) = persistent_normalize_origin(&value)
+    {
+        return origin;
     }
     if let Ok(value) = std::env::var("ALLOWED_ORIGINS") {
         for raw in value.split(',') {
@@ -1077,49 +1067,48 @@ async fn list_openclaw_agents(
             .entry(session.session_key.clone())
             .or_insert(session);
     }
-    if !gateway_key_is_empty(openclaw_settings.gateway_key.as_str()) {
-        if let Ok(agents_result) = invoke_openclaw_rpc(
+    if !gateway_key_is_empty(openclaw_settings.gateway_key.as_str())
+        && let Ok(agents_result) = invoke_openclaw_rpc(
             gateway_url,
             openclaw_settings.gateway_key.trim(),
             "agents.list",
             serde_json::json!({}),
         )
         .await
-        {
-            let project_agent = openclaw_project_agent_name(&project);
-            let has_project_agent = agents_result
-                .get("agents")
-                .and_then(serde_json::Value::as_array)
-                .map(|agents| {
-                    agents.iter().any(|row| {
-                        value_to_string(row.get("id"))
-                            .map(|id| id == project_agent)
-                            .unwrap_or(false)
-                    })
+    {
+        let project_agent = openclaw_project_agent_name(&project);
+        let has_project_agent = agents_result
+            .get("agents")
+            .and_then(serde_json::Value::as_array)
+            .map(|agents| {
+                agents.iter().any(|row| {
+                    value_to_string(row.get("id"))
+                        .map(|id| id == project_agent)
+                        .unwrap_or(false)
                 })
-                .unwrap_or(false);
-            if has_project_agent {
-                let main_session_key = format!("agent:{project_agent}:main");
-                sessions_by_key
-                    .entry(main_session_key.clone())
-                    .or_insert(OpenClawAgentSession {
-                        session_key: main_session_key,
-                        label: Some(project_agent),
-                        display_name: None,
-                        state: Some("idle".to_string()),
-                        agent_state: Some("idle".to_string()),
-                        busy: Some(false),
-                        processing: Some(false),
-                        status: Some("idle".to_string()),
-                        updated_at: Some(0),
-                        last_activity: None,
-                        model: None,
-                        thinking: None,
-                        total_tokens: Some(0),
-                        context_tokens: Some(0),
-                        parent_session_key: None,
-                    });
-            }
+            })
+            .unwrap_or(false);
+        if has_project_agent {
+            let main_session_key = format!("agent:{project_agent}:main");
+            sessions_by_key
+                .entry(main_session_key.clone())
+                .or_insert(OpenClawAgentSession {
+                    session_key: main_session_key,
+                    label: Some(project_agent),
+                    display_name: None,
+                    state: Some("idle".to_string()),
+                    agent_state: Some("idle".to_string()),
+                    busy: Some(false),
+                    processing: Some(false),
+                    status: Some("idle".to_string()),
+                    updated_at: Some(0),
+                    last_activity: None,
+                    model: None,
+                    thinking: None,
+                    total_tokens: Some(0),
+                    context_tokens: Some(0),
+                    parent_session_key: None,
+                });
         }
     }
     let mut sessions = sessions_by_key.into_values().collect::<Vec<_>>();
@@ -1512,20 +1501,19 @@ async fn send_openclaw_session_message(
         .get("status")
         .and_then(serde_json::Value::as_str)
         .map(|s| s.to_ascii_lowercase())
-    {
-        if matches!(
+        && matches!(
             status.as_str(),
             "error" | "forbidden" | "timeout" | "cancelled"
-        ) {
-            let message = result
-                .get("error")
-                .and_then(serde_json::Value::as_str)
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or("OpenClaw session send failed");
-            return Err(ApiError::BadRequest(format!(
-                "OpenClaw gateway tool sessions_send failed: {message}"
-            )));
-        }
+        )
+    {
+        let message = result
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("OpenClaw session send failed");
+        return Err(ApiError::BadRequest(format!(
+            "OpenClaw gateway tool sessions_send failed: {message}"
+        )));
     }
 
     Ok(ResponseJson(ApiResponse::success(result)))

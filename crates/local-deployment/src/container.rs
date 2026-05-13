@@ -625,10 +625,8 @@ impl LocalContainerService {
                                 container.finalize_task_for_review(&ctx).await;
                             }
                         }
-                    } else {
-                        if !finalized {
-                            container.finalize_task_for_review(&ctx).await;
-                        }
+                    } else if !finalized {
+                        container.finalize_task_for_review(&ctx).await;
                     }
                 }
             }

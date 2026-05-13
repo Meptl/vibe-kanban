@@ -534,16 +534,16 @@ pub fn normalize_logs(msg_store: Arc<MsgStore>, worktree_path: &Path) {
                     _ => {}
                 },
                 ServerNotification::CommandExecutionOutputDelta(notification) => {
-                    if let Some(command_state) = state.commands.get_mut(&notification.item_id) {
-                        if !notification.delta.is_empty() {
-                            command_state.stdout.push_str(&notification.delta);
-                            if let Some(index) = command_state.index {
-                                replace_normalized_entry(
-                                    &msg_store,
-                                    index,
-                                    command_state.to_normalized_entry(),
-                                );
-                            }
+                    if let Some(command_state) = state.commands.get_mut(&notification.item_id)
+                        && !notification.delta.is_empty()
+                    {
+                        command_state.stdout.push_str(&notification.delta);
+                        if let Some(index) = command_state.index {
+                            replace_normalized_entry(
+                                &msg_store,
+                                index,
+                                command_state.to_normalized_entry(),
+                            );
                         }
                     }
                 }

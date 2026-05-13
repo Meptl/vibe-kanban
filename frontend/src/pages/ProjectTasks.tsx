@@ -54,6 +54,7 @@ import {
 import TaskKanbanBoard, {
   type KanbanColumnItem,
 } from '@/components/tasks/TaskKanbanBoard';
+import { TaskOriginBadge } from '@/components/tasks/TaskOriginBadge';
 import type {
   DragEndEvent,
   DragMoveEvent,
@@ -934,6 +935,7 @@ export function ProjectTasks() {
             title: task.title,
             description: task.description,
             status: newStatus,
+            origin: null,
             parent_task_attempt: task.parent_task_attempt,
             image_ids: null,
           });
@@ -1437,6 +1439,7 @@ export function ProjectTasks() {
             <div className="min-w-0 flex-1 truncate text-base md:text-lg font-semibold text-left">
               {selectedTask.title || 'Task'}
             </div>
+            <TaskOriginBadge origin={selectedTask.origin} className="shrink-0" />
           </div>
         </div>
       </NewCardHeader>

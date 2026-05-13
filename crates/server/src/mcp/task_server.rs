@@ -3,7 +3,7 @@ use std::{future::Future, path::PathBuf, str::FromStr};
 use db::models::{
     project::Project,
     tag::Tag,
-    task::{CreateTask, Task, TaskStatus, TaskWithAttemptStatus, UpdateTask},
+    task::{CreateTask, Task, TaskOrigin, TaskStatus, TaskWithAttemptStatus, UpdateTask},
     task_attempt::{TaskAttempt, TaskAttemptContext},
 };
 use executors::{executors::BaseCodingAgent, profile::ExecutorProfileId};
@@ -619,6 +619,7 @@ impl TaskServer {
             title,
             description: expanded_description,
             status: Some(TaskStatus::Todo),
+            origin: Some(TaskOrigin::Agent),
             parent_task_attempt,
             image_ids: None,
         };
